@@ -512,10 +512,13 @@ def send_email(html_content: str, pdf_bytes: bytes, item_count: int):
     today_str  = date.today().strftime("%b %d")
     today_file = date.today().strftime("%Y-%m-%d")
 
+    # TO_EMAIL may list several addresses separated by commas or semicolons.
+    recipients = [e.strip() for e in re.split(r"[,;]+", TO_EMAIL) if e.strip()]
+
     msg = MIMEMultipart("mixed")
     msg["Subject"] = f"🧠 AI Briefing {today_str} — {item_count} updates inside"
     msg["From"]    = GMAIL_USER
-    msg["To"]      = TO_EMAIL
+    msg["To"]      = ", ".join(recipients)
 
     # HTML body
     alt = MIMEMultipart("alternative")
@@ -532,9 +535,9 @@ def send_email(html_content: str, pdf_bytes: bytes, item_count: int):
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
-        server.sendmail(GMAIL_USER, TO_EMAIL, msg.as_string())
+        server.sendmail(GMAIL_USER, recipients, msg.as_string())
 
-    print(f"✅ Sent digest + PDF to {TO_EMAIL}  ({item_count} items)")
+    print(f"✅ Sent digest + PDF to {len(recipients)} recipient(s): {', '.join(recipients)}")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
