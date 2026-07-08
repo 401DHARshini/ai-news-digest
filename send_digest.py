@@ -457,6 +457,9 @@ def send_email(html_content: str, pdf_bytes: bytes, item_count: int):
               "App Password is exactly 16. If login fails, make sure you used an "
               "App Password (https://myaccount.google.com/apppasswords), NOT your "
               "normal Gmail password.")
+    print(f"[auth check] Signing in as '{GMAIL_USER}' "
+          f"(app-password length: {len(GMAIL_APP_PASSWORD)}). The App Password MUST "
+          f"have been created while logged into THIS exact account.")
 
     today_str  = date.today().strftime("%b %d")
     today_file = date.today().strftime("%Y-%m-%d")
