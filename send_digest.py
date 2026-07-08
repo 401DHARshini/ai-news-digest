@@ -32,9 +32,11 @@ def _load_dotenv(path):
 _load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 # ── Config ─────────────────────────────────────────────────────────────────
-GMAIL_USER        = os.environ.get("GMAIL_USER")
-GMAIL_APP_PASSWORD= os.environ.get("GMAIL_APP_PASSWORD")
-TO_EMAIL          = os.environ.get("TO_EMAIL", GMAIL_USER)
+GMAIL_USER         = (os.environ.get("GMAIL_USER") or "").strip()
+# App passwords are shown as "abcd efgh ijkl mnop" — strip the display spaces
+# so a copy-paste that kept them still authenticates correctly.
+GMAIL_APP_PASSWORD = (os.environ.get("GMAIL_APP_PASSWORD") or "").replace(" ", "").strip()
+TO_EMAIL           = (os.environ.get("TO_EMAIL") or GMAIL_USER).strip()
 ROLE_FILTER       = os.environ.get("ROLE_FILTER", "")
 
 # ── Category colours (header bg, accent, text) ──────────────────────────────
@@ -450,6 +452,11 @@ def filter_by_role(digest: dict) -> dict:
 def send_email(html_content: str, pdf_bytes: bytes, item_count: int):
     if not GMAIL_USER or not GMAIL_APP_PASSWORD:
         raise RuntimeError("Missing GMAIL_USER or GMAIL_APP_PASSWORD env vars.")
+    if len(GMAIL_APP_PASSWORD) != 16:
+        print(f"⚠️  GMAIL_APP_PASSWORD is {len(GMAIL_APP_PASSWORD)} chars — a Gmail "
+              "App Password is exactly 16. If login fails, make sure you used an "
+              "App Password (https://myaccount.google.com/apppasswords), NOT your "
+              "normal Gmail password.")
 
     today_str  = date.today().strftime("%b %d")
     today_file = date.today().strftime("%Y-%m-%d")
