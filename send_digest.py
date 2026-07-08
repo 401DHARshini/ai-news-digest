@@ -1,11 +1,13 @@
 """
 Builds a beautiful HTML email + PDF attachment and sends via Gmail SMTP.
 - HTML email: full UI with color-coded cards, role badges, stats bar
-- PDF: clean downloadable digest people can save/share/print
+- PDF: clean, print-ready digest with contextual summaries and role checklists
 """
 
 import os
 import io
+import re
+import sys
 import smtplib
 from datetime import date
 from email.mime.multipart import MIMEMultipart
@@ -13,6 +15,12 @@ from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 
 from fetch_news import collect_digest
+
+# Make console prints (emoji, arrows) safe on Windows terminals too.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 
 # ── Load .env for local testing (real env vars / GitHub secrets win) ────────
@@ -211,6 +219,51 @@ def build_html(digest: dict) -> str:
 # ══════════════════════════════════════════════════════════════════════════════
 #  PDF GENERATION  (reportlab)
 # ══════════════════════════════════════════════════════════════════════════════
+#
+# reportlab's built-in fonts (Helvetica) only cover Latin-1 — emoji and many
+# symbols render as empty boxes. So everything below is emoji-free by design:
+# colour + typography carry the visual weight, and a green ZapfDingbats tick
+# (a standard PDF font) drives the role checklist.
+
+# Match anything the base fonts can't draw (emoji, dingbats, arrows, flags).
+_EMOJI_RE = re.compile(
+    "[\U0001F000-\U0001FAFF"      # emoji, pictographs, symbols & flags
+    "\U00002600-\U000027BF"       # misc symbols + dingbats (☀ ✅ ✈ …)
+    "\U0001F1E6-\U0001F1FF"       # regional indicator letters
+    "←-⇿⬀-⯿"  # arrows / misc symbols
+    "️‍⃣]"         # variation selector, ZWJ, keycap
+)
+
+
+def _clean(s: str) -> str:
+    """Strip characters the PDF fonts can't render; collapse whitespace."""
+    return re.sub(r"\s+", " ", _EMOJI_RE.sub("", s or "")).strip()
+
+
+def _safe(s: str) -> str:
+    """Clean + XML-escape dynamic text for a reportlab Paragraph."""
+    return _clean(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _safe_url(u: str) -> str:
+    return (u or "#").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "%22")
+
+
+# Canonical roles shown as a checklist beneath every story.
+_PDF_ROLES = [
+    ("Developer",          ("developer",)),
+    ("Tester / QA",        ("tester", "qa")),
+    ("AI / ML Engineer",   ("ai engineer", "ml engineer")),
+    ("Architect",          ("architect", "tech lead")),
+    ("Product / Business", ("product", "business")),
+    ("Everyone",           ("awareness", "everyone", "general")),
+]
+
+
+def _role_flags(roles):
+    joined = " ".join(_clean(r).lower() for r in (roles or []))
+    return [(name, any(k in joined for k in kws)) for name, kws in _PDF_ROLES]
+
 
 def build_pdf(digest: dict) -> bytes:
     from reportlab.lib.pagesizes import A4
@@ -219,208 +272,211 @@ def build_pdf(digest: dict) -> bytes:
     from reportlab.lib import colors
     from reportlab.platypus import (
         SimpleDocTemplate, Paragraph, Spacer, HRFlowable,
-        Table, TableStyle, KeepTogether, PageBreak, Image
+        Table, TableStyle, KeepTogether, PageBreak,
     )
-    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
-    from reportlab.pdfgen import canvas
-    from reportlab.lib.utils import ImageReader
+    from reportlab.lib.enums import TA_CENTER
+
+    ACCENT_HEX = {
+        "🤖 Model Updates":           "#6366f1",
+        "🚀 New Launch / Feature":    "#3b82f6",
+        "🔬 R&D / Research":          "#0ea5e9",
+        "✅ Good News / Wins":         "#16a34a",
+        "⚠️ Bad News / Risk":          "#dc2626",
+        "💡 AI Awareness / Must Know": "#f59e0b",
+        "📰 General AI Update":        "#8b5cf6",
+    }
+    CLEAN_NAME = {
+        "🤖 Model Updates":           "MODEL UPDATES",
+        "🚀 New Launch / Feature":    "NEW LAUNCHES & FEATURES",
+        "🔬 R&D / Research":          "R&D / RESEARCH",
+        "✅ Good News / Wins":         "GOOD NEWS & WINS",
+        "⚠️ Bad News / Risk":          "RISKS & CONCERNS",
+        "💡 AI Awareness / Must Know": "MUST-KNOW / AWARENESS",
+        "📰 General AI Update":        "GENERAL AI UPDATES",
+    }
+
+    DARK   = colors.HexColor("#0f172a")
+    BODY   = colors.HexColor("#334155")
+    MUTED  = colors.HexColor("#94a3b8")
+    LINE   = colors.HexColor("#e2e8f0")
+    WHITE  = colors.white
+    INDIGO = colors.HexColor("#6366f1")
+
+    S = getSampleStyleSheet()
+
+    def mk(name, **kw):
+        return ParagraphStyle(name, parent=S["Normal"], **kw)
+
+    st_kicker = mk("kick", fontSize=11, textColor=INDIGO, alignment=TA_CENTER,
+                   fontName="Helvetica-Bold", spaceAfter=8, leading=14)
+    st_title  = mk("ttl", fontSize=42, textColor=DARK, alignment=TA_CENTER,
+                   fontName="Helvetica-Bold", leading=46)
+    st_cdate  = mk("cdt", fontSize=13, textColor=BODY, alignment=TA_CENTER)
+    st_h2     = mk("h2", fontSize=15, textColor=DARK, fontName="Helvetica-Bold", spaceAfter=12)
+    st_cat    = mk("cat", fontSize=15, textColor=WHITE, fontName="Helvetica-Bold", leading=18)
+    st_ctag   = mk("ctag", fontSize=9.5, textColor=WHITE, leading=12)
+    st_ttl2   = mk("t2", fontSize=12.5, textColor=DARK, fontName="Helvetica-Bold",
+                   leading=16, spaceAfter=4)
+    st_sum    = mk("sum", fontSize=10, textColor=BODY, leading=15, spaceAfter=7)
+    st_meta   = mk("meta", fontSize=9, textColor=MUTED)
+    st_ron    = mk("ron", fontSize=8.5, textColor=colors.HexColor("#166534"), leading=11)
+    st_roff   = mk("roff", fontSize=8.5, textColor=colors.HexColor("#cbd5e1"), leading=11)
+    st_toc    = mk("toc", fontSize=11, textColor=BODY, leading=17)
+    st_top    = mk("top", fontSize=10.5, textColor=DARK, fontName="Helvetica-Bold",
+                   leading=14, spaceAfter=7)
+    st_snum   = mk("snum", fontSize=22, textColor=DARK, fontName="Helvetica-Bold", alignment=TA_CENTER)
+    st_slbl   = mk("slbl", fontSize=8, textColor=MUTED, alignment=TA_CENTER)
+    st_foot   = mk("foot", fontSize=8.5, textColor=MUTED, alignment=TA_CENTER, leading=12)
+
+    def role_checklist(roles):
+        flags = _role_flags(roles)
+        cells = []
+        for name, on in flags:
+            if on:
+                cells.append(Paragraph(
+                    f'<font name="ZapfDingbats" color="#16a34a">4</font> <b>{_safe(name)}</b>',
+                    st_ron))
+            else:
+                cells.append(Paragraph(_safe(name), st_roff))
+        t = Table([cells[0:3], cells[3:6]],
+                  colWidths=[5.9 * cm, 5.9 * cm, 5.9 * cm], hAlign="LEFT")
+        style = [
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 9),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 9),
+            ("LINEBELOW", (0, 0), (-1, 0), 4, WHITE),   # gap between the two rows
+            ("LINEAFTER", (0, 0), (-2, -1), 4, WHITE),  # gap between columns
+        ]
+        k = 0
+        for r in range(2):
+            for c in range(3):
+                on = flags[k][1]
+                style.append(("BACKGROUND", (c, r), (c, r),
+                              colors.HexColor("#dcfce7") if on else colors.HexColor("#f1f5f9")))
+                k += 1
+        t.setStyle(TableStyle(style))
+        return t
 
     buf = io.BytesIO()
-
-    class GradientCanvas(canvas.Canvas):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
-        leftMargin=1.5*cm, rightMargin=1.5*cm,
-        topMargin=1.5*cm, bottomMargin=1.5*cm,
+        leftMargin=1.5 * cm, rightMargin=1.5 * cm,
+        topMargin=1.4 * cm, bottomMargin=1.4 * cm,
         title=f"AI Briefing {date.today().strftime('%B %d %Y')}",
     )
 
-    # ── Colour palette ────────────────────────────────────────────
-    CAT_PDF_COLOR = {
-        "🤖 Model Updates":           colors.HexColor("#6366f1"),
-        "🚀 New Launch / Feature":    colors.HexColor("#3b82f6"),
-        "🔬 R&D / Research":          colors.HexColor("#10b981"),
-        "✅ Good News / Wins":         colors.HexColor("#22c55e"),
-        "⚠️ Bad News / Risk":          colors.HexColor("#ef4444"),
-        "💡 AI Awareness / Must Know": colors.HexColor("#f59e0b"),
-        "📰 General AI Update":        colors.HexColor("#8b5cf6"),
-    }
-    WHITE  = colors.white
-    DARK   = colors.HexColor("#0f172a")
-    GRAY   = colors.HexColor("#64748b")
-    LGRAY  = colors.HexColor("#f1f5f9")
-    BORDER = colors.HexColor("#e2e8f0")
-    PRIMARY = colors.HexColor("#6366f1")
-
-    # ── Styles ───────────────────────────────────────────────────
-    S = getSampleStyleSheet()
-
-    title_style = ParagraphStyle("Title", parent=S["Heading1"],
-        fontSize=48, fontName="Helvetica-Bold", textColor=WHITE,
-        alignment=TA_CENTER, spaceAfter=8, leading=52)
-    subtitle_style = ParagraphStyle("Subtitle", parent=S["Normal"],
-        fontSize=14, textColor=colors.HexColor("#c7d2fe"), alignment=TA_CENTER, spaceAfter=4, leading=18)
-    date_style = ParagraphStyle("Date", parent=S["Normal"],
-        fontSize=12, textColor=colors.HexColor("#a5b4fc"), alignment=TA_CENTER, spaceAfter=16)
-
-    stats_header = ParagraphStyle("StatsHeader", parent=S["Normal"],
-        fontSize=9, fontName="Helvetica-Bold", textColor=DARK, spaceAfter=4)
-    stats_value = ParagraphStyle("StatsValue", parent=S["Normal"],
-        fontSize=24, fontName="Helvetica-Bold", textColor=PRIMARY, spaceAfter=8)
-
-    cat_style = ParagraphStyle("CatHead", parent=S["Normal"],
-        fontSize=16, fontName="Helvetica-Bold", textColor=WHITE, leading=18, spaceAfter=4)
-    tagline_style = ParagraphStyle("Tagline", parent=S["Normal"],
-        fontSize=10, textColor=colors.HexColor("#e2e8f0"), leading=13, spaceAfter=0)
-
-    item_num = ParagraphStyle("ItemNum", parent=S["Normal"],
-        fontSize=12, fontName="Helvetica-Bold", textColor=DARK, spaceAfter=0)
-    item_title_style = ParagraphStyle("ItemTitle", parent=S["Normal"],
-        fontSize=12, fontName="Helvetica-Bold", textColor=DARK,
-        spaceAfter=4, leading=16)
-    item_sum_style = ParagraphStyle("ItemSum", parent=S["Normal"],
-        fontSize=10, textColor=colors.HexColor("#374151"),
-        spaceAfter=6, leading=14)
-    meta_style = ParagraphStyle("Meta", parent=S["Normal"],
-        fontSize=8, textColor=GRAY, spaceAfter=2)
-    role_style = ParagraphStyle("Role", parent=S["Normal"],
-        fontSize=8, textColor=colors.HexColor("#4338ca"), leading=11)
-
-    toc_header = ParagraphStyle("TOCHeader", parent=S["Normal"],
-        fontSize=14, fontName="Helvetica-Bold", textColor=DARK, spaceAfter=12)
-    toc_item = ParagraphStyle("TOCItem", parent=S["Normal"],
-        fontSize=10, textColor=DARK, spaceAfter=6, leading=13)
-
     story = []
-
-    # ── COVER PAGE ────────────────────────────────────────────
-    story.append(Spacer(1, 1*cm))
-    story.append(Paragraph("🧠", ParagraphStyle("Icon", parent=S["Normal"],
-                                                 fontSize=72, alignment=TA_CENTER, spaceAfter=16)))
-    story.append(Paragraph("Daily AI Briefing", title_style))
-    story.append(Paragraph(date.today().strftime("%A, %B %d, %Y"), date_style))
-
     total = sum(len(v) for v in digest.values())
-    story.append(Spacer(1, 0.8*cm))
+    ncat = len(digest)
 
-    # Stats box
-    stats_data = [
-        [Paragraph(f"<b>{total}</b>", stats_value),
-         Paragraph(f"<b>{len(digest)}</b>", stats_value),
-         Paragraph(f"<b>3–5</b>", stats_value)],
-        [Paragraph("Stories", stats_header),
-         Paragraph("Categories", stats_header),
-         Paragraph("Min Read", stats_header)],
-    ]
-    stats_table = Table(stats_data, colWidths=[5*cm, 5*cm, 5*cm])
-    stats_table.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,1), LGRAY),
-        ("ALIGN", (0,0), (-1,-1), "CENTER"),
-        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-        ("TOPPADDING", (0,0), (-1,-1), 8),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 8),
-        ("LEFTPADDING", (0,0), (-1,-1), 6),
-        ("RIGHTPADDING", (0,0), (-1,-1), 6),
-        ("GRID", (0,0), (-1,-1), 0.5, BORDER),
+    # ── Cover ──────────────────────────────────────────────────────
+    story.append(Spacer(1, 3.4 * cm))
+    story.append(Paragraph("ARTIFICIAL INTELLIGENCE", st_kicker))
+    story.append(Paragraph("Daily AI Briefing", st_title))
+    story.append(Spacer(1, 0.25 * cm))
+    story.append(Paragraph(date.today().strftime("%A, %B %d, %Y"), st_cdate))
+    story.append(Spacer(1, 1.1 * cm))
+
+    read_min = max(2, round(total * 0.4))
+    stat_tbl = Table(
+        [[Paragraph(str(total), st_snum), Paragraph(str(ncat), st_snum), Paragraph(str(read_min), st_snum)],
+         [Paragraph("STORIES", st_slbl), Paragraph("CATEGORIES", st_slbl), Paragraph("MIN READ", st_slbl)]],
+        colWidths=[4.7 * cm, 4.7 * cm, 4.7 * cm], hAlign="CENTER")
+    stat_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
+        ("BOX", (0, 0), (-1, -1), 0.5, LINE),
+        ("LINEAFTER", (0, 0), (-2, -1), 0.5, LINE),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, 0), 12),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 2),
+        ("TOPPADDING", (0, 1), (-1, 1), 0),
+        ("BOTTOMPADDING", (0, 1), (-1, 1), 12),
     ]))
-    story.append(KeepTogether([stats_table, Spacer(1, 1.5*cm)]))
-
+    story.append(stat_tbl)
+    story.append(Spacer(1, 1.1 * cm))
+    story.append(HRFlowable(width="35%", thickness=3, color=INDIGO, hAlign="CENTER"))
     story.append(PageBreak())
 
-    # ── TABLE OF CONTENTS ────────────────────────────────────
-    story.append(Paragraph("📑 Inside This Briefing", toc_header))
-    story.append(Spacer(1, 0.2*cm))
-
-    toc_items = []
+    # ── Contents + top stories ─────────────────────────────────────
+    story.append(Paragraph("In this briefing", st_h2))
     for cat, items in digest.items():
-        toc_items.append(Paragraph(f"<b>{cat}</b> — {len(items)} stories", toc_item))
+        hexc = ACCENT_HEX.get(cat, "#6366f1")
+        name = CLEAN_NAME.get(cat, _clean(cat).upper())
+        story.append(Paragraph(
+            f'<font color="{hexc}"><b>•</b></font>&nbsp;&nbsp;'
+            f'<b>{_safe(name)}</b>&nbsp;&nbsp;'
+            f'<font color="#94a3b8">{len(items)} stories</font>',
+            st_toc))
+    story.append(Spacer(1, 0.6 * cm))
+    story.append(HRFlowable(width="100%", thickness=1, color=LINE))
+    story.append(Spacer(1, 0.5 * cm))
 
-    for item in toc_items:
-        story.append(item)
-
-    story.append(Spacer(1, 0.5*cm))
-    story.append(HRFlowable(width="100%", thickness=1, color=BORDER, spaceAfter=20, spaceBefore=10))
-
-    # ── KEY HIGHLIGHTS ───────────────────────────────────────
-    all_items = []
-    for items in digest.values():
-        all_items.extend(items)
-
+    all_items = [it for items in digest.values() for it in items]
     if all_items:
-        story.append(Paragraph("⭐ Top 3 Stories Today", toc_header))
-        for i, item in enumerate(all_items[:3], 1):
-            story.append(Paragraph(f"{i}. {item['title']}",
-                                  ParagraphStyle("TopStory", parent=S["Normal"],
-                                              fontSize=11, fontName="Helvetica-Bold",
-                                              textColor=DARK, spaceAfter=8, leading=14)))
-        story.append(Spacer(1, 0.5*cm))
-        story.append(HRFlowable(width="100%", thickness=1, color=BORDER, spaceAfter=20, spaceBefore=10))
-
+        story.append(Paragraph("Top stories today", st_h2))
+        for i, it in enumerate(all_items[:3], 1):
+            story.append(Paragraph(
+                f'<font color="#6366f1"><b>{i:02d}</b></font>&nbsp;&nbsp;{_safe(it.get("title", ""))}',
+                st_top))
     story.append(PageBreak())
 
-    # ── SECTIONS ──────────────────────────────────────────────
-    for cat_idx, (category, items) in enumerate(digest.items()):
-        accent = CAT_PDF_COLOR.get(category, colors.HexColor("#6366f1"))
-        tagline = CAT_TAGLINES.get(category, "")
+    # ── Sections ───────────────────────────────────────────────────
+    for ci, (category, items) in enumerate(digest.items()):
+        hexc = ACCENT_HEX.get(category, "#6366f1")
+        accent = colors.HexColor(hexc)
+        name = CLEAN_NAME.get(category, _clean(category).upper())
+        tagline = _clean(CAT_TAGLINES.get(category, ""))
 
-        # Category header with background
-        header_data = [[Paragraph(category, cat_style)],
-                       [Paragraph(tagline, tagline_style)]]
-        header_table = Table(header_data, colWidths=[17.5*cm])
-        header_table.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,-1), accent),
-            ("TOPPADDING", (0,0), (-1,-1), 14),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 10),
-            ("LEFTPADDING", (0,0), (-1,-1), 16),
-            ("RIGHTPADDING", (0,0), (-1,-1), 16),
+        header = Table(
+            [[Paragraph(_safe(name), st_cat)],
+             [Paragraph(_safe(tagline), st_ctag)]],
+            colWidths=[18.0 * cm])
+        header.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), accent),
+            ("TOPPADDING", (0, 0), (-1, 0), 12),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 2),
+            ("TOPPADDING", (0, 1), (-1, 1), 0),
+            ("BOTTOMPADDING", (0, 1), (-1, 1), 12),
+            ("LEFTPADDING", (0, 0), (-1, -1), 16),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 16),
         ]))
-        story.append(KeepTogether([header_table, Spacer(1, 0.35*cm)]))
+        story.append(header)
+        story.append(Spacer(1, 0.4 * cm))
 
-        # Items
         for i, it in enumerate(items, 1):
-            roles_text = "  ".join(it.get("roles", []))
-            ai_label = " 🤖 AI-Powered" if it.get("ai_powered") else ""
-
-            # Story number and title
-            story.append(Paragraph(f"<b>{i}.</b> {it['title']}", item_title_style))
-
-            # Summary
-            story.append(Paragraph(it["summary"], item_sum_style))
-
-            # Metadata row
-            meta_row = f"<b>Source:</b> {it['source']}{ai_label}"
-            story.append(Paragraph(meta_row, meta_style))
-
-            # Roles
-            if roles_text:
-                story.append(Paragraph(f"<b>For:</b> {roles_text}", role_style))
-
-            # Separator
+            block = [
+                Paragraph(
+                    f'<font color="{hexc}"><b>{i:02d}</b></font>&nbsp;&nbsp;{_safe(it.get("title", ""))}',
+                    st_ttl2),
+                Paragraph(_safe(it.get("summary", "")), st_sum),
+                role_checklist(it.get("roles", [])),
+                Spacer(1, 0.18 * cm),
+                Paragraph(
+                    f'<b>Source:</b> {_safe(it.get("source", ""))}'
+                    f'&nbsp;&nbsp;&nbsp;'
+                    f'<link href="{_safe_url(it.get("link", "#"))}" color="#2563eb">'
+                    f'<b>Read full article »</b></link>',
+                    st_meta),
+            ]
+            story.append(KeepTogether(block))
             if i < len(items):
-                story.append(Spacer(1, 0.25*cm))
-                story.append(HRFlowable(width="100%", thickness=0.5, color=BORDER,
-                                       spaceAfter=0.35*cm, spaceBefore=0.1*cm))
+                story.append(HRFlowable(width="100%", thickness=0.75, color=LINE,
+                                        spaceBefore=0.35 * cm, spaceAfter=0.35 * cm))
 
-        story.append(Spacer(1, 0.8*cm))
-
-        # Page break between categories (except last)
-        if cat_idx < len(digest) - 1:
+        story.append(Spacer(1, 0.5 * cm))
+        if ci < ncat - 1:
             story.append(PageBreak())
 
-    # ── FOOTER ─────────────────────────────────────────────────
-    story.append(Spacer(1, 0.5*cm))
-    story.append(HRFlowable(width="100%", thickness=1, color=BORDER, spaceAfter=12, spaceBefore=6))
-
-    footer_text = f"AI News Digest  ·  {date.today().strftime('%B %d, %Y')}  ·  Delivered daily at 9 AM"
-    story.append(Paragraph(footer_text,
-        ParagraphStyle("Footer", parent=S["Normal"],
-                      fontSize=9, textColor=GRAY, alignment=TA_CENTER)))
-    story.append(Paragraph("Powered by intelligent news aggregation from 30+ AI sources",
-        ParagraphStyle("SubFooter", parent=S["Normal"],
-                      fontSize=8, textColor=colors.HexColor("#cbd5e1"), alignment=TA_CENTER)))
+    # ── Footer ─────────────────────────────────────────────────────
+    story.append(Spacer(1, 0.3 * cm))
+    story.append(HRFlowable(width="100%", thickness=1, color=LINE, spaceAfter=10))
+    story.append(Paragraph(
+        f"AI News Digest &nbsp;|&nbsp; {date.today().strftime('%B %d, %Y')} "
+        f"&nbsp;|&nbsp; Delivered daily at 9:00 AM IST", st_foot))
+    story.append(Paragraph(
+        "Aggregated from 30+ trusted AI news &amp; research sources", st_foot))
 
     doc.build(story)
     return buf.getvalue()
@@ -452,14 +508,6 @@ def filter_by_role(digest: dict) -> dict:
 def send_email(html_content: str, pdf_bytes: bytes, item_count: int):
     if not GMAIL_USER or not GMAIL_APP_PASSWORD:
         raise RuntimeError("Missing GMAIL_USER or GMAIL_APP_PASSWORD env vars.")
-    if len(GMAIL_APP_PASSWORD) != 16:
-        print(f"⚠️  GMAIL_APP_PASSWORD is {len(GMAIL_APP_PASSWORD)} chars — a Gmail "
-              "App Password is exactly 16. If login fails, make sure you used an "
-              "App Password (https://myaccount.google.com/apppasswords), NOT your "
-              "normal Gmail password.")
-    print(f"[auth check] Signing in as '{GMAIL_USER}' "
-          f"(app-password length: {len(GMAIL_APP_PASSWORD)}). The App Password MUST "
-          f"have been created while logged into THIS exact account.")
 
     today_str  = date.today().strftime("%b %d")
     today_file = date.today().strftime("%Y-%m-%d")
@@ -511,11 +559,11 @@ if __name__ == "__main__":
     local_pdf  = f"AI-Briefing-{today_file}.pdf"
     with open(local_pdf, "wb") as f:
         f.write(pdf_bytes)
-    print(f"PDF saved locally → {local_pdf}")
+    print(f"PDF saved locally -> {local_pdf}")
 
     if GMAIL_USER and GMAIL_APP_PASSWORD:
         print("Sending email...")
         send_email(html_content, pdf_bytes, count)
     else:
-        print("⚠️  GMAIL_USER / GMAIL_APP_PASSWORD not set — email skipped.")
+        print("GMAIL_USER / GMAIL_APP_PASSWORD not set — email skipped.")
         print(f"    Open '{local_pdf}' to preview the PDF output.")

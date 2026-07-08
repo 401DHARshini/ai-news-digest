@@ -192,13 +192,29 @@ def clean_text(raw: str) -> str:
     return text
 
 
-def crisp_summary(title: str, summary: str, max_chars: int = 160) -> str:
-    """One punchy line — like telling a friend right before the exam."""
-    base = summary if len(summary) > 40 else title
-    base = clean_text(base)
-    if len(base) > max_chars:
-        base = base[:max_chars].rsplit(" ", 1)[0] + "…"
-    return base
+def crisp_summary(title: str, summary: str, max_chars: int = 340) -> str:
+    """A fuller, self-contained summary that keeps context and ends cleanly.
+
+    Uses the article description (falling back to the title), strips common
+    RSS boilerplate, and cuts on a sentence boundary instead of mid-word so
+    the reader gets the what / who / where without a dangling fragment.
+    """
+    base = clean_text(summary)
+    # Drop trailing RSS boilerplate like "Read more" / "The post … appeared first on …"
+    base = re.sub(
+        r"\s*(read more.*|continue reading.*|the post .*? appeared first on .*)$",
+        "", base, flags=re.IGNORECASE,
+    ).strip()
+    if len(base) < 45:                       # too thin to be useful → use the title
+        base = clean_text(title)
+    if len(base) <= max_chars:
+        return base
+    window = base[:max_chars]
+    # Prefer to end at the last full sentence within the limit
+    end = max(window.rfind(". "), window.rfind("! "), window.rfind("? "))
+    if end >= 140:
+        return window[:end + 1].strip()
+    return window.rsplit(" ", 1)[0].strip() + "…"
 
 
 def is_ai_related(text: str) -> bool:
