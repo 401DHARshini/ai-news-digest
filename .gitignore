@@ -1,0 +1,9 @@
+# Secrets — never commit these
+.env
+
+# Generated digests
+AI-Briefing-*.pdf
+
+# Python
+__pycache__/
+*.pyc
