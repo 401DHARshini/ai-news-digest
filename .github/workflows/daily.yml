@@ -6,6 +6,12 @@ on:
     - cron: "30 3 * * *"
   workflow_dispatch: {}   # lets you trigger it manually from the Actions tab
 
+# Needed so the web edition can be published to GitHub Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
   send-digest:
     runs-on: ubuntu-latest
@@ -21,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Send daily digest
+      - name: Send daily digest + build web edition
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
@@ -29,4 +35,25 @@ jobs:
           NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
           ROLE_FILTER: ${{ secrets.ROLE_FILTER }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: python send_digest.py
+
+      - name: Upload web edition for Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  # Publishes the web edition. Requires Pages enabled (Settings -> Pages ->
+  # Source: GitHub Actions). If Pages isn't enabled yet, only this job fails —
+  # the email above still sends fine.
+  deploy-web:
+    needs: send-digest
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

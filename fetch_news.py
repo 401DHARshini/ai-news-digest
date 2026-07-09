@@ -13,10 +13,9 @@ from datetime import datetime, timedelta, timezone
 
 # AI enrichment via HuggingFace (used only when HF_TOKEN is set)
 try:
-    from ai_summarizer import ai_enrich
-    HF_ENABLED = bool(os.environ.get("HF_TOKEN", ""))
+    from ai_summarizer import ai_enrich, AI_ENABLED
 except ImportError:
-    HF_ENABLED = False
+    AI_ENABLED = False
     def ai_enrich(*a, **kw): return None  # noqa: E302
 
 # ---------------------------------------------------------------------
@@ -217,6 +216,27 @@ def crisp_summary(title: str, summary: str, max_chars: int = 340) -> str:
     return window.rsplit(" ", 1)[0].strip() + "…"
 
 
+def extract_image(entry) -> str:
+    """Best-effort thumbnail URL from an RSS entry (media tags, enclosure, inline img)."""
+    for key in ("media_thumbnail", "media_content"):
+        for m in (entry.get(key) or []):
+            url = (m or {}).get("url")
+            if url:
+                return url
+    for link in (entry.get("links") or []):
+        if str(link.get("type", "")).startswith("image") and link.get("href"):
+            return link["href"]
+    blob = ""
+    if entry.get("content"):
+        try:
+            blob = entry["content"][0].get("value", "")
+        except Exception:
+            blob = ""
+    blob = blob or entry.get("summary", "") or entry.get("description", "")
+    m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', blob, re.IGNORECASE)
+    return m.group(1) if m else ""
+
+
 def is_ai_related(text: str) -> bool:
     t = f" {text.lower()} "
     return any(kw in t for kw in AI_KEYWORDS)
@@ -252,16 +272,16 @@ def fetch_rss_items():
                 if not title or not link:
                     continue
 
-                enriched = ai_enrich(title, summary) if HF_ENABLED else None
                 combined = f"{title} {summary}"
                 items.append({
                     "title": title,
-                    "summary": enriched["summary"] if enriched else crisp_summary(title, summary),
+                    "summary": crisp_summary(title, summary),
                     "link": link,
                     "source": source_name,
-                    "category": enriched["category"] if enriched else categorize(combined),
-                    "roles": enriched["roles"] if enriched else tag_roles(combined),
-                    "ai_powered": bool(enriched),
+                    "image": extract_image(entry),
+                    "category": categorize(combined),
+                    "roles": tag_roles(combined),
+                    "ai_powered": False,
                 })
         except Exception as e:
             print(f"[warn] failed to parse {feed_url}: {e}")
@@ -293,16 +313,16 @@ def fetch_newsapi_items():
             link = art.get("url", "")
             if not title or not link:
                 continue
-            enriched = ai_enrich(title, summary) if HF_ENABLED else None
             combined = f"{title} {summary}"
             items.append({
                 "title": title,
-                "summary": enriched["summary"] if enriched else crisp_summary(title, summary),
+                "summary": crisp_summary(title, summary),
                 "link": link,
                 "source": (art.get("source") or {}).get("name", "NewsAPI"),
-                "category": enriched["category"] if enriched else categorize(combined),
-                "roles": enriched["roles"] if enriched else tag_roles(combined),
-                "ai_powered": bool(enriched),
+                "image": art.get("urlToImage") or "",
+                "category": categorize(combined),
+                "roles": tag_roles(combined),
+                "ai_powered": False,
             })
     except Exception as e:
         print(f"[warn] NewsAPI fetch failed: {e}")
@@ -324,6 +344,27 @@ def dedupe(items):
 # ---------------------------------------------------------------------
 # 5. MAIN COLLECT FUNCTION
 # ---------------------------------------------------------------------
+
+def enrich_digest(digest: dict) -> None:
+    """Rewrite each final story's summary (and role tags) with a free LLM, in place.
+
+    Runs only on the trimmed final set — roughly one API call per shown story —
+    so it stays well inside free-tier limits instead of calling the model for
+    every fetched item. Any story the model can't handle keeps its keyword summary.
+    """
+    total = sum(len(v) for v in digest.values())
+    powered = 0
+    for items in digest.values():
+        for it in items:
+            res = ai_enrich(it["title"], it.get("summary", ""))
+            if res:
+                it["summary"] = res["summary"]
+                if res.get("roles"):
+                    it["roles"] = res["roles"]
+                it["ai_powered"] = True
+                powered += 1
+    print(f"[ai] enriched {powered}/{total} stories with an LLM summary")
+
 
 def collect_digest(max_per_category: int = 6):
     all_items = fetch_rss_items() + fetch_newsapi_items()
@@ -347,6 +388,10 @@ def collect_digest(max_per_category: int = 6):
     for cat in order:
         if cat in grouped:
             final[cat] = grouped[cat][:max_per_category]
+
+    if AI_ENABLED:
+        print("Enriching summaries with AI (free multi-model fallback)...")
+        enrich_digest(final)
 
     return final
 

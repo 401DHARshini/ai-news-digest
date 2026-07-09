@@ -1,20 +1,16 @@
 """
-AI-powered summarization, categorization, and role tagging
-using the FREE HuggingFace Inference API.
+Free, multi-model AI enrichment for the news digest.
 
-Model used: mistralai/Mistral-7B-Instruct-v0.3
-  - Free to use, just needs a HF token
-  - Great at following tone/format instructions
-  - Handles all 3 tasks in ONE prompt per article (fast + cheap on free tier)
+Rewrites each story's summary into a clear 2-3 sentence explainer (and suggests
+role tags) using FREE LLMs. It tries a fallback CHAIN of models across several
+providers until one succeeds — so if a model is busy, rate-limited, or retired,
+the next one takes over. If no API key is set, or every model fails, the caller
+silently falls back to the keyword/extractive logic in fetch_news.py.
 
-Fallback: if HF_TOKEN is not set, the module does nothing and
-fetch_news.py falls back to its original keyword-based logic.
-
-How to get a FREE HuggingFace token:
-  1. Sign up at https://huggingface.co/join  (free, no credit card)
-  2. Go to https://huggingface.co/settings/tokens
-  3. Create a token with "Read" permission
-  4. Add it as HF_TOKEN secret in GitHub / env var locally
+Add ONE OR MORE of these as env vars / GitHub Actions secrets (all free tiers):
+  GROQ_API_KEY        https://console.groq.com/keys       (recommended - fast + reliable)
+  OPENROUTER_API_KEY  https://openrouter.ai/keys          (lots of ":free" models)
+  HF_TOKEN            https://huggingface.co/settings/tokens
 """
 
 import os
@@ -22,158 +18,141 @@ import re
 import json
 import requests
 
-HF_TOKEN = os.environ.get("HF_TOKEN", "")
+GROQ_KEY       = os.environ.get("GROQ_API_KEY", "").strip()
+OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
+HF_TOKEN       = os.environ.get("HF_TOKEN", "").strip()
 
-# Primary model — best free instruct model on HF
-HF_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
-HF_API_URL = f"https://api-inference.huggingface.co/models/{HF_MODEL}"
-
-# Fallback model — smaller, faster, always warm on HF
-FALLBACK_MODEL = "HuggingFaceH4/zephyr-7b-beta"
-FALLBACK_API_URL = f"https://api-inference.huggingface.co/models/{FALLBACK_MODEL}"
-
-
-# ------------------------------------------------------------------
-# PROMPT TEMPLATE
-# ------------------------------------------------------------------
-
-SYSTEM_PROMPT = """You are a sharp tech journalist summarizing AI news for busy engineers.
-Your job: read a news title + description, then return ONLY a JSON object with these 3 fields:
-
-{
-  "summary": "<one punchy sentence, max 150 chars, written like you're explaining to a friend before an exam — casual, direct, no jargon>",
-  "category": "<exactly one of: 🚀 New Launch | 🔬 R&D / Research | ✅ Good News / Wins | ⚠️ Bad News / Risk | 📰 General AI Update>",
-  "roles": ["<role1>", "<role2>"]
+# OpenAI-compatible chat endpoints for each provider.
+PROVIDERS = {
+    "groq":       {"url": "https://api.groq.com/openai/v1/chat/completions",   "key": GROQ_KEY},
+    "openrouter": {"url": "https://openrouter.ai/api/v1/chat/completions",     "key": OPENROUTER_KEY},
+    "hf":         {"url": "https://router.huggingface.co/v1/chat/completions", "key": HF_TOKEN},
 }
 
-For roles, pick ONLY from this list (can pick multiple, pick none as 🌍 General Awareness if unsure):
-- 👨‍💻 Developer
-- 🧪 Tester / QA
-- 🧠 AI Engineer / ML Engineer
-- 🏗️ Architect / Tech Lead
-- 📈 Product / Business
-- 🌍 General Awareness
+# Tried top-to-bottom; first success wins. Entries whose provider has no key are
+# skipped, so you can enable as few or as many providers as you like. If a model
+# is decommissioned or rate-limited, the request fails and the next one is tried.
+MODEL_CHAIN = [
+    ("groq",       "llama-3.3-70b-versatile"),
+    ("groq",       "llama-3.1-8b-instant"),
+    ("groq",       "gemma2-9b-it"),
+    ("openrouter", "meta-llama/llama-3.3-70b-instruct:free"),
+    ("openrouter", "google/gemma-2-9b-it:free"),
+    ("openrouter", "mistralai/mistral-7b-instruct:free"),
+    ("openrouter", "meta-llama/llama-3.1-8b-instruct:free"),
+    ("hf",         "meta-llama/Llama-3.3-70B-Instruct"),
+    ("hf",         "mistralai/Mistral-7B-Instruct-v0.3"),
+]
 
-Rules:
-- summary must sound like a friend texting you, NOT a press release
-- Return ONLY valid JSON, no explanation, no markdown fences
-"""
+AI_ENABLED = bool(GROQ_KEY or OPENROUTER_KEY or HF_TOKEN)
+
+# Model returns short keys; map them back to the digest's canonical labels.
+CATEGORY_MAP = {
+    "model_updates": "🤖 Model Updates",
+    "new_launch":    "🚀 New Launch / Feature",
+    "research":      "🔬 R&D / Research",
+    "good_news":     "✅ Good News / Wins",
+    "bad_news":      "⚠️ Bad News / Risk",
+    "awareness":     "💡 AI Awareness / Must Know",
+    "general":       "📰 General AI Update",
+}
+ROLE_MAP = {
+    "developer":   "👨‍💻 Developer",
+    "tester":      "🧪 Tester / QA",
+    "ai_engineer": "🧠 AI Engineer / ML Engineer",
+    "architect":   "🏗️ Architect / Tech Lead",
+    "product":     "📈 Product / Business",
+    "everyone":    "🌍 AI Awareness (Everyone)",
+}
+
+SYSTEM_PROMPT = (
+    "You are a sharp AI-industry news editor writing a daily briefing for busy "
+    "tech professionals. Given a headline and description, reply with ONLY a JSON "
+    "object (no markdown, no commentary) with exactly these keys:\n"
+    '  "summary": 2-3 plain factual sentences explaining WHAT happened, WHO is '
+    "involved, and WHY it matters. Self-contained and specific, no hype, no buzzwords.\n"
+    '  "category": exactly one of '
+    '["model_updates","new_launch","research","good_news","bad_news","awareness","general"].\n'
+    '  "roles": an array of 1-3 from '
+    '["developer","tester","ai_engineer","architect","product","everyone"] - who should care.\n'
+    "Output must be valid JSON."
+)
 
 
-def _build_prompt(title: str, description: str) -> str:
-    return f"""<s>[INST] {SYSTEM_PROMPT}
-
-Title: {title}
-Description: {description[:500]}
-[/INST]"""
-
-
-# ------------------------------------------------------------------
-# HF API CALL
-# ------------------------------------------------------------------
-
-def _call_hf(prompt: str, api_url: str) -> str | None:
-    headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+def _call(provider: str, model: str, title: str, desc: str) -> str | None:
+    cfg = PROVIDERS[provider]
+    headers = {"Authorization": f"Bearer {cfg['key']}", "Content-Type": "application/json"}
+    if provider == "openrouter":
+        headers["HTTP-Referer"] = "https://github.com/401DHARshini/ai-news-digest"
+        headers["X-Title"] = "AI News Digest"
     payload = {
-        "inputs": prompt,
-        "parameters": {
-            "max_new_tokens": 200,
-            "temperature": 0.4,
-            "return_full_text": False,
-        },
+        "model": model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f"Headline: {title}\nDescription: {desc[:700]}"},
+        ],
+        "temperature": 0.3,
+        "max_tokens": 320,
     }
-    try:
-        resp = requests.post(api_url, headers=headers, json=payload, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
-        if isinstance(data, list) and data:
-            return data[0].get("generated_text", "")
-        return None
-    except Exception as e:
-        print(f"[hf] {api_url} error: {e}")
-        return None
+    if provider == "groq":
+        payload["response_format"] = {"type": "json_object"}
+    resp = requests.post(cfg["url"], headers=headers, json=payload, timeout=30)
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
 
 
-def _parse_response(raw: str) -> dict | None:
-    """Extract JSON from model output, handle minor formatting issues."""
-    if not raw:
+def _parse(content: str) -> dict | None:
+    if not content:
         return None
-    # strip any accidental markdown fences
-    raw = re.sub(r"```(?:json)?", "", raw).strip()
-    # find first { ... } block
+    raw = re.sub(r"```(?:json)?", "", content).strip()
     match = re.search(r"\{.*\}", raw, re.DOTALL)
     if not match:
         return None
     try:
-        return json.loads(match.group())
+        obj = json.loads(match.group())
     except json.JSONDecodeError:
         return None
-
-
-# ------------------------------------------------------------------
-# PUBLIC FUNCTION
-# ------------------------------------------------------------------
-
-def ai_enrich(title: str, raw_summary: str) -> dict | None:
-    """
-    Calls HF Inference API to get:
-      - a crisp, friend-tone summary
-      - smart category
-      - role tags
-
-    Returns a dict with keys: summary, category, roles
-    Returns None if HF_TOKEN is not set or the call fails,
-    so the caller can fall back to keyword logic.
-    """
-    if not HF_TOKEN:
-        return None  # silently skip — keyword fallback will be used
-
-    prompt = _build_prompt(title, raw_summary)
-
-    # try primary model first, then fallback
-    raw_output = _call_hf(prompt, HF_API_URL)
-    if not raw_output:
-        print("[hf] primary model failed, trying fallback...")
-        raw_output = _call_hf(prompt, FALLBACK_API_URL)
-
-    result = _parse_response(raw_output)
-    if not result:
-        print(f"[hf] could not parse response for: {title[:60]}")
+    summary = str(obj.get("summary", "")).strip()
+    if not summary:
         return None
-
-    # validate / sanitise fields
-    summary = result.get("summary", "").strip()[:200]
-    category = result.get("category", "📰 General AI Update").strip()
-    roles = result.get("roles", ["🌍 General Awareness"])
-    if not isinstance(roles, list):
-        roles = [str(roles)]
-
+    category = CATEGORY_MAP.get(str(obj.get("category", "")).strip().lower(), "📰 General AI Update")
+    roles_in = obj.get("roles", [])
+    if not isinstance(roles_in, list):
+        roles_in = [roles_in]
+    roles = [ROLE_MAP[r.strip().lower()] for r in roles_in
+             if isinstance(r, str) and r.strip().lower() in ROLE_MAP]
     return {
-        "summary": summary or title,
+        "summary": summary[:400],
         "category": category,
-        "roles": roles,
+        "roles": roles or ["🌍 AI Awareness (Everyone)"],
     }
 
 
-# ------------------------------------------------------------------
-# QUICK TEST
-# ------------------------------------------------------------------
+def ai_enrich(title: str, raw_summary: str) -> dict | None:
+    """Try each free model in turn; return {summary, category, roles} or None."""
+    if not AI_ENABLED:
+        return None
+    for provider, model in MODEL_CHAIN:
+        if not PROVIDERS[provider]["key"]:
+            continue
+        try:
+            result = _parse(_call(provider, model, title, raw_summary or title))
+            if result:
+                return result
+        except Exception as e:
+            print(f"[ai] {provider}:{model} -> {type(e).__name__}: {str(e)[:120]}")
+    return None
+
 
 if __name__ == "__main__":
-    if not HF_TOKEN:
-        print("Set HF_TOKEN env var to test.\nexport HF_TOKEN=hf_xxxxxxxxxxxx")
-    else:
-        test_title = "OpenAI launches GPT-5 with real-time voice and vision"
-        test_desc = (
-            "OpenAI has released GPT-5, its most powerful model yet, "
-            "featuring real-time voice interaction, vision capabilities, "
-            "and a new agentic mode that can autonomously browse the web and run code."
+    active = [p for p, c in PROVIDERS.items() if c["key"]]
+    print(f"AI enabled: {AI_ENABLED} | active providers: {active or 'none'}")
+    if AI_ENABLED:
+        demo = ai_enrich(
+            "OpenAI launches GPT-5 with real-time voice and vision",
+            "OpenAI released GPT-5, its most capable model yet, featuring real-time "
+            "voice, vision, and an agentic mode that can browse the web and run code.",
         )
-        print("Calling HuggingFace API...")
-        result = ai_enrich(test_title, test_desc)
-        if result:
-            print(f"\n✅ Summary : {result['summary']}")
-            print(f"   Category: {result['category']}")
-            print(f"   Roles   : {', '.join(result['roles'])}")
-        else:
-            print("❌ AI enrichment failed — check token and model availability")
+        print(json.dumps(demo, ensure_ascii=False, indent=2) if demo else "all models failed")
+    else:
+        print("Set GROQ_API_KEY (or OPENROUTER_API_KEY / HF_TOKEN) to test.")

@@ -68,152 +68,318 @@ CAT_TAGLINES = {
     "📰 General AI Update":        "Everything else worth knowing today",
 }
 
-ROLE_COLORS = {
-    "👨‍💻 Developer":              ("#eff6ff", "#1d4ed8"),
-    "🧪 Tester / QA":             ("#f0fdf4", "#15803d"),
-    "🧠 AI Engineer / ML Engineer":("#faf5ff", "#7e22ce"),
-    "🏗️ Architect / Tech Lead":   ("#fff7ed", "#c2410c"),
-    "📈 Product / Business":       ("#fefce8", "#a16207"),
-    "🌍 AI Awareness (Everyone)":  ("#f8fafc", "#475569"),
-    "🌍 General Awareness":        ("#f8fafc", "#475569"),
+# Emoji-free category labels + modern accent colours (email UI)
+CAT_LABEL = {
+    "🤖 Model Updates":           "Model Updates",
+    "🚀 New Launch / Feature":    "New Launches",
+    "🔬 R&D / Research":          "R&D / Research",
+    "✅ Good News / Wins":         "Good News",
+    "⚠️ Bad News / Risk":          "Risks & Concerns",
+    "💡 AI Awareness / Must Know": "Must Know",
+    "📰 General AI Update":        "General Updates",
 }
+CAT_ACCENT = {
+    "🤖 Model Updates":           "#6366F1",
+    "🚀 New Launch / Feature":    "#0EA5E9",
+    "🔬 R&D / Research":          "#8B5CF6",
+    "✅ Good News / Wins":         "#10B981",
+    "⚠️ Bad News / Risk":          "#EF4444",
+    "💡 AI Awareness / Must Know": "#F59E0B",
+    "📰 General AI Update":        "#64748B",
+}
+
+# Shared font stacks (render reliably across email clients)
+SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+SERIF = "Georgia,'Iowan Old Style','Times New Roman',serif"
+
+# Editorial "AI Dispatch" email palette — one dominant accent, warm paper
+E_PAPER  = "#EFEADD"
+E_CARD   = "#FCFAF4"
+E_INK    = "#1A1712"
+E_BODY   = "#4A453B"
+E_MUTED  = "#8C8578"
+E_RULE   = "#DBD4C4"
+E_ACCENT = "#C63F1E"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  HTML EMAIL
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _role_badge(role: str) -> str:
-    bg, color = ROLE_COLORS.get(role, ("#f1f5f9", "#334155"))
-    return (
-        f'<span style="display:inline-block;background:{bg};color:{color};'
-        f'border:1px solid {color}33;font-size:11px;font-weight:600;'
-        f'padding:2px 9px;border-radius:20px;margin:2px 3px 2px 0;'
-        f'white-space:nowrap;">{role}</span>'
-    )
+def _he(s: str) -> str:
+    """Strip emoji, then HTML-escape text for safe inclusion in the email."""
+    return (_clean(s).replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;").replace('"', "&quot;"))
 
 
-def _cat_section(category: str, items: list, idx: int) -> str:
-    bg, accent, light = CAT_STYLE.get(category, ("#1e293b", "#94a3b8", "#f8fafc"))
-    tagline = CAT_TAGLINES.get(category, "")
+def _url(u: str) -> str:
+    return (u or "#").replace("&", "&amp;").replace('"', "%22").replace("<", "%3C").replace(">", "%3E")
 
-    cards_html = ""
-    for i, it in enumerate(items):
-        badges = "".join(_role_badge(r) for r in it.get("roles", []))
-        ai_tag = (
-            '<span style="background:#7c3aed;color:#fff;font-size:10px;'
-            'padding:1px 7px;border-radius:10px;margin-left:6px;">🤖 AI</span>'
-            if it.get("ai_powered") else ""
-        )
-        separator = "" if i == len(items) - 1 else (
-            f'<div style="height:1px;background:{accent}22;margin:14px 0;"></div>'
-        )
-        cards_html += f"""
-        <div>
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-            <div style="font-size:14px;font-weight:700;color:#111;line-height:1.4;
-                        flex:1;margin-right:8px;">
-              <a href="{it['link']}" style="color:#111;text-decoration:none;">{it['title']}</a>
-            </div>
-          </div>
-          <div style="font-size:13.5px;color:#374151;line-height:1.55;margin:6px 0 8px;">
-            {it['summary']}
-          </div>
-          <div style="margin-bottom:8px;">{badges}</div>
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;">
-            <span style="font-size:11.5px;color:#6b7280;">
-              📰 {it['source']}{ai_tag}
-            </span>
-            <a href="{it['link']}"
-               style="display:inline-block;background:{accent};color:#fff;
-                      font-size:12px;font-weight:600;padding:5px 14px;
-                      border-radius:6px;text-decoration:none;margin-top:4px;">
-              Read more →
-            </a>
-          </div>
-          {separator}
-        </div>
-        """
 
+def _slug(category: str) -> str:
+    name = CAT_LABEL.get(category, _clean(category))
+    return "sec-" + (re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "x")
+
+
+def _img(it: dict) -> str:
+    img = (it.get("image") or "").strip()
+    if img.lower().startswith(("http://", "https://")):
+        return (f'<img src="{_url(img)}" width="600" alt="" '
+                f'style="width:100%;max-width:100%;height:auto;display:block;margin:15px 0 2px;">')
+    return ""  # editorial flow simply omits missing images — no filler boxes
+
+
+def _role_line(roles: list) -> str:
+    names = [_he(name) for name, on in _role_flags(roles) if on]
+    if not names:
+        return ""
+    txt = " &middot; ".join(names)
+    return (f'<div style="font-family:{SANS};font-size:10.5px;font-weight:700;color:{E_MUTED};'
+            f'text-transform:uppercase;letter-spacing:1.2px;margin:13px 0 0;">Relevant for&nbsp;&nbsp; {txt}</div>')
+
+
+def _article(it: dict, num: int, lead: bool = False) -> str:
+    link = _url(it.get("link", "#"))
+    title_size = 28 if lead else 20
+    summary = _he(it.get("summary", ""))
+    if lead and summary:
+        summary = (f'<span style="font-family:{SERIF};font-size:46px;font-weight:700;color:{E_ACCENT};'
+                   f'line-height:0.82;float:left;padding:6px 9px 0 0;">{summary[0]}</span>{summary[1:]}')
     return f"""
-    <div style="margin-bottom:24px;border-radius:12px;overflow:hidden;
-                box-shadow:0 1px 6px rgba(0,0,0,0.09);">
-      <!-- Category header -->
-      <div style="background:{bg};padding:14px 20px;">
-        <div style="font-size:16px;font-weight:800;color:#fff;">{category}</div>
-        <div style="font-size:12px;color:{light};opacity:0.85;margin-top:2px;">{tagline}</div>
+    <div style="margin:0 0 22px;">
+      <div style="margin:0 0 6px;">
+        <span style="font-family:{SERIF};font-size:15px;font-weight:700;color:{E_ACCENT};">{num:02d}</span>
+        <span style="font-family:{SANS};font-size:10.5px;font-weight:700;color:{E_MUTED};text-transform:uppercase;letter-spacing:1.2px;margin-left:9px;">{_he(it.get('source',''))}</span>
       </div>
-      <!-- Cards -->
-      <div style="background:#fff;padding:18px 20px;">
-        {cards_html}
+      <div style="font-family:{SERIF};font-size:{title_size}px;font-weight:700;color:{E_INK};line-height:1.22;letter-spacing:-0.4px;">
+        <a href="{link}" style="color:{E_INK};text-decoration:none;">{_he(it.get('title',''))}</a>
       </div>
+      {_img(it)}
+      <div style="font-family:{SANS};font-size:15px;color:{E_BODY};line-height:1.66;margin:12px 0 0;">
+        {summary}
+      </div>
+      {_role_line(it.get('roles', []))}
+      <a href="{link}" style="display:inline-block;font-family:{SANS};font-size:12px;font-weight:700;color:{E_ACCENT};text-transform:uppercase;letter-spacing:1px;text-decoration:none;margin-top:12px;">Read the full story &rarr;</a>
     </div>
+    <div style="border-top:1px solid {E_RULE};margin:0 0 22px;"></div>
     """
 
 
+def _section(category: str, items: list, first: bool = False) -> str:
+    name = _he(CAT_LABEL.get(category, _clean(category))).upper()
+    tagline = _he(CAT_TAGLINES.get(category, ""))
+    anchor = _slug(category)
+    stories = "".join(_article(it, i, lead=(first and i == 1)) for i, it in enumerate(items, 1))
+    return f"""
+    <a name="{anchor}" id="{anchor}"></a>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:30px 0 4px;"><tr>
+      <td style="vertical-align:middle;white-space:nowrap;padding-right:12px;"><span style="font-family:{SANS};font-size:12px;font-weight:700;color:{E_ACCENT};text-transform:uppercase;letter-spacing:2px;">{name}</span></td>
+      <td style="vertical-align:middle;width:100%;"><div style="border-top:1px solid {E_INK};font-size:0;line-height:0;">&nbsp;</div></td>
+      <td style="vertical-align:middle;white-space:nowrap;padding-left:12px;"><span style="font-family:{SANS};font-size:11px;color:{E_MUTED};">{len(items)} stories</span></td>
+    </tr></table>
+    <div style="font-family:{SERIF};font-size:14px;font-style:italic;color:{E_MUTED};margin:0 0 20px;">{tagline}</div>
+    {stories}
+    """
+
+
+def _index(digest: dict) -> str:
+    links = []
+    for cat, items in digest.items():
+        name = _he(CAT_LABEL.get(cat, _clean(cat)))
+        anchor = _slug(cat)
+        links.append(
+            f'<a href="#{anchor}" style="text-decoration:none;font-family:{SANS};font-size:12.5px;'
+            f'font-weight:600;color:{E_INK};white-space:nowrap;">{name} '
+            f'<span style="color:{E_ACCENT};">{len(items)}</span></a>'
+        )
+    sep = f'<span style="color:{E_RULE};">&nbsp;&nbsp;&middot;&nbsp;&nbsp;</span>'
+    return (f'<div style="margin:16px 0 2px;line-height:2.1;text-align:center;">'
+            f'<span style="font-family:{SANS};font-size:10px;font-weight:700;color:{E_ACCENT};'
+            f'text-transform:uppercase;letter-spacing:2px;">In this issue&nbsp;&nbsp;</span>'
+            f'{sep.join(links)}</div>')
+
+
 def build_html(digest: dict) -> str:
-    today     = date.today().strftime("%A, %B %d %Y")
-    date_short= date.today().strftime("%b %d")
-    total     = sum(len(v) for v in digest.values())
+    today = date.today().strftime("%A, %B %d, %Y").upper()
+    total = sum(len(v) for v in digest.values())
+    read_min = max(2, round(total * 0.4))
 
-    # Stats bar
-    stats_items = "".join(
-        f'<span style="margin:0 12px;font-size:13px;">'
-        f'<b style="color:#111;">{len(v)}</b>'
-        f'<span style="color:#6b7280;"> {cat}</span></span>'
-        for cat, v in digest.items()
-    )
-
-    sections = "".join(_cat_section(cat, items, i)
+    nav = _index(digest) if digest else ""
+    sections = "".join(_section(cat, items, first=(i == 0))
                        for i, (cat, items) in enumerate(digest.items()))
-
     if not sections:
-        sections = '<p style="color:#6b7280;text-align:center;padding:40px;">Quiet AI day — nothing major today. Check back tomorrow!</p>'
+        sections = (f'<div style="font-family:{SANS};text-align:center;color:{E_MUTED};'
+                    f'padding:44px 20px;">Quiet AI day — check back tomorrow.</div>')
 
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;">
-<div style="max-width:640px;margin:0 auto;padding:24px 16px 40px;">
+<body style="margin:0;padding:0;background:{E_PAPER};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:{E_PAPER};">
+<tr><td align="center" style="padding:0 0 40px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:{E_CARD};">
 
-  <!-- ── HEADER ── -->
-  <div style="background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 60%,#312e81 100%);
-              border-radius:16px;padding:32px 28px 24px;margin-bottom:20px;text-align:center;">
-    <div style="font-size:36px;margin-bottom:6px;">🧠</div>
-    <div style="font-size:24px;font-weight:900;color:#fff;letter-spacing:-0.5px;">
-      Daily AI Briefing
-    </div>
-    <div style="font-size:13px;color:#a5b4fc;margin-top:6px;">{today}</div>
-    <div style="margin-top:16px;display:inline-block;background:rgba(255,255,255,0.1);
-                border-radius:20px;padding:6px 18px;">
-      <span style="color:#e0e7ff;font-size:13px;font-weight:600;">
-        {total} stories · 3-min read · PDF attached 📎
-      </span>
-    </div>
-  </div>
+  <tr><td style="padding:34px 36px 0;">
+    <div style="font-family:{SANS};font-size:10px;font-weight:700;color:{E_ACCENT};letter-spacing:3px;text-transform:uppercase;text-align:center;">Artificial Intelligence &middot; Daily Edition</div>
+    <div style="font-family:{SERIF};font-size:48px;font-weight:700;color:{E_INK};letter-spacing:-1.2px;line-height:1;margin:10px 0 12px;text-align:center;">The AI Dispatch</div>
+    <div style="border-bottom:3px solid {E_INK};font-size:0;line-height:0;">&nbsp;</div>
+    <div style="border-bottom:1px solid {E_INK};margin-top:3px;font-size:0;line-height:0;">&nbsp;</div>
+    <div style="font-family:{SANS};font-size:10.5px;color:{E_MUTED};letter-spacing:1.5px;text-transform:uppercase;text-align:center;margin-top:10px;">{_he(today)} &nbsp;&middot;&nbsp; {total} stories &nbsp;&middot;&nbsp; {read_min} min read</div>
+    {nav}
+    <div style="text-align:center;margin-top:2px;"><a href="{WEB_URL}" style="display:inline-block;background:{E_ACCENT};color:#FFFFFF;font-family:{SANS};font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;text-decoration:none;padding:11px 24px;border-radius:7px;">Open the full edition &rarr;</a></div>
+  </td></tr>
 
-  <!-- ── STATS BAR ── -->
-  <div style="background:#fff;border-radius:10px;padding:12px 16px;margin-bottom:20px;
-              text-align:center;box-shadow:0 1px 4px rgba(0,0,0,0.07);overflow-x:auto;">
-    {stats_items}
-  </div>
+  <tr><td style="padding:8px 36px;">
+    {sections}
+  </td></tr>
 
-  <!-- ── SECTIONS ── -->
-  {sections}
+  <tr><td style="padding:10px 36px 34px;">
+    <div style="border-top:3px solid {E_INK};font-size:0;line-height:0;">&nbsp;</div>
+    <div style="border-top:1px solid {E_INK};margin-top:3px;margin-bottom:13px;font-size:0;line-height:0;">&nbsp;</div>
+    <div style="font-family:{SERIF};font-size:17px;font-weight:700;color:{E_INK};">The AI Dispatch</div>
+    <div style="font-family:{SANS};font-size:11px;color:{E_MUTED};margin-top:5px;line-height:1.6;">Delivered daily at 9:00 AM IST &nbsp;&middot;&nbsp; Aggregated from 30+ AI news &amp; research sources &nbsp;&middot;&nbsp; PDF edition attached</div>
+  </td></tr>
 
-  <!-- ── FOOTER ── -->
-  <div style="text-align:center;padding-top:16px;border-top:1px solid #e2e8f0;margin-top:8px;">
-    <div style="font-size:13px;color:#64748b;">
-      📎 Full digest PDF attached — save, print, or share it
-    </div>
-    <div style="font-size:11px;color:#94a3b8;margin-top:6px;">
-      Delivered daily at 9 AM · AI News Digest Bot · {date_short}
-    </div>
-  </div>
-
-</div>
+</table>
+</td></tr>
+</table>
 </body>
 </html>"""
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  WEB EDITION  ("read online" page, published to GitHub Pages)
+# ══════════════════════════════════════════════════════════════════════════════
+
+WEB_URL = "https://401dharshini.github.io/ai-news-digest/"
+
+WEB_ACCENT = {
+    "🤖 Model Updates":           "#7C5CFF",
+    "🚀 New Launch / Feature":    "#FF6B4A",
+    "🔬 R&D / Research":          "#00B8D9",
+    "✅ Good News / Wins":         "#22C55E",
+    "⚠️ Bad News / Risk":          "#F43F5E",
+    "💡 AI Awareness / Must Know": "#F59E0B",
+    "📰 General AI Update":        "#EC4899",
+}
+
+_WEB_CSS = r"""
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--ink:#2A2340;--body:#544B6E;--muted:#8B84A3;--line:rgba(42,35,64,0.10)}
+html{scroll-behavior:smooth;scroll-padding-top:96px}
+body{font-family:'Spline Sans',sans-serif;color:var(--body);background:#F1ECFA;line-height:1.66;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.aurora{position:fixed;inset:-25% -15%;z-index:-2;filter:blur(72px);opacity:.92}
+.aurora i{position:absolute;border-radius:50%;mix-blend-mode:multiply;animation:drift 24s ease-in-out infinite}
+.aurora .a{width:54vw;height:54vw;left:-8vw;top:-12vw;background:radial-gradient(circle,#FFB49E,transparent 62%)}
+.aurora .b{width:50vw;height:50vw;right:-8vw;top:-6vw;background:radial-gradient(circle,#FF8FC7,transparent 62%);animation-delay:-7s}
+.aurora .c{width:52vw;height:52vw;left:8vw;top:42vh;background:radial-gradient(circle,#B39DFF,transparent 62%);animation-delay:-13s}
+.aurora .d{width:46vw;height:46vw;right:-4vw;bottom:-6vh;background:radial-gradient(circle,#8FD0FF,transparent 62%);animation-delay:-18s}
+@keyframes drift{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(4vw,3vh) scale(1.08)}66%{transform:translate(-3vw,-2vh) scale(.95)}}
+.wrap{max-width:720px;margin:0 auto;padding:0 20px 90px}
+.mast{text-align:center;padding:66px 0 24px}
+.mast .kick{font-size:12px;font-weight:600;letter-spacing:4px;text-transform:uppercase;color:#C0398B}
+.mast h1{font-family:'Fraunces',serif;font-weight:900;font-size:66px;line-height:.96;color:var(--ink);letter-spacing:-2.4px;margin:16px 0 14px}
+.mast .sub{font-size:12.5px;letter-spacing:2.4px;text-transform:uppercase;color:var(--muted)}
+.nav{position:sticky;top:14px;z-index:10;display:flex;flex-wrap:wrap;gap:7px;justify-content:center;padding:11px;border-radius:20px;background:rgba(255,255,255,.5);backdrop-filter:blur(18px) saturate(1.5);-webkit-backdrop-filter:blur(18px) saturate(1.5);border:1px solid rgba(255,255,255,.7);box-shadow:0 14px 44px rgba(42,35,64,.12);margin-bottom:14px}
+.nav a{font-size:13px;font-weight:600;color:var(--ink);text-decoration:none;padding:7px 13px;border-radius:13px;transition:.25s;white-space:nowrap}
+.nav a span{opacity:.45;margin-left:5px;font-variant-numeric:tabular-nums}
+.nav a:hover{background:rgba(255,255,255,.75)}
+.nav a.active{color:#fff;background:var(--ink)}
+.sheet{background:rgba(255,255,255,.52);backdrop-filter:blur(22px) saturate(1.35);-webkit-backdrop-filter:blur(22px) saturate(1.35);border:1px solid rgba(255,255,255,.7);border-radius:28px;padding:42px 46px;box-shadow:0 34px 90px rgba(42,35,64,.13)}
+section{padding:32px 0 6px;scroll-margin-top:96px}
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:14px;margin-bottom:24px;border-bottom:1px solid var(--line);padding-bottom:12px}
+.sec-h .kick{font-size:13px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--acc)}
+.sec-h .cnt{font-size:12px;color:var(--muted);text-align:right;white-space:nowrap}
+.story{padding:26px 0;border-bottom:1px solid var(--line)}
+.story:last-child{border-bottom:0}
+.story .m{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.story .num{font-family:'Fraunces',serif;font-weight:900;font-size:26px;line-height:1}
+.story .src{font-size:11px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted)}
+.story h3{font-family:'Fraunces',serif;font-weight:600;font-size:28px;line-height:1.18;letter-spacing:-.6px;margin:2px 0 0}
+.story h3 a{color:var(--ink);text-decoration:none;background:linear-gradient(var(--acc),var(--acc)) no-repeat left 100%/0% 2px;transition:background-size .4s;padding-bottom:3px}
+.story h3 a:hover{background-size:100% 2px}
+.story img{width:100%;height:auto;display:block;border-radius:16px;margin:18px 0 2px;box-shadow:0 20px 48px rgba(42,35,64,.2);transition:.45s}
+.story img:hover{transform:translateY(-4px);box-shadow:0 30px 66px rgba(42,35,64,.28)}
+.story p{font-size:16px;color:var(--body);margin-top:14px}
+.story.lead p::first-letter{font-family:'Fraunces',serif;font-weight:900;font-size:60px;float:left;line-height:.78;padding:9px 11px 0 0;color:var(--acc)}
+.tags{margin-top:13px;display:flex;flex-wrap:wrap;gap:6px}
+.tags span{font-size:11px;font-weight:600;color:var(--acc);background:color-mix(in srgb,var(--acc) 13%,white);padding:3px 10px;border-radius:20px}
+.more{display:inline-block;margin-top:15px;font-size:13px;font-weight:700;text-decoration:none;transition:.25s}
+.more:hover{letter-spacing:1px}
+.reveal{opacity:0;transform:translateY(24px);transition:.75s cubic-bezier(.2,.7,.2,1)}
+.reveal.in{opacity:1;transform:none}
+.foot{text-align:center;padding:46px 10px 0;color:var(--muted);font-size:13px}
+.foot b{font-family:'Fraunces',serif;color:var(--ink);font-size:19px;font-weight:600;display:block;margin-bottom:6px}
+@media(max-width:560px){.mast h1{font-size:44px}.sheet{padding:26px 20px}.story h3{font-size:22px}.nav{gap:5px;padding:9px}}
+"""
+
+_WEB_JS = r"""
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.12});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+const links=new Map([...document.querySelectorAll('.nav a')].map(a=>[a.dataset.t,a]));
+const spy=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){links.forEach(a=>a.classList.remove('active'));const a=links.get(e.target.id);if(a)a.classList.add('active')}}),{rootMargin:'-46% 0px -50% 0px'});
+document.querySelectorAll('section').forEach(s=>spy.observe(s));
+"""
+
+_WEB_TEMPLATE = """<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The AI Dispatch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>__CSS__</style></head>
+<body>
+<div class="aurora"><i class="a"></i><i class="b"></i><i class="c"></i><i class="d"></i></div>
+<div class="wrap">
+  <div class="mast reveal"><div class="kick">Artificial Intelligence &middot; Daily Edition</div><h1>The AI Dispatch</h1><div class="sub">__DATE__ &middot; __TOTAL__ stories &middot; __READ__ min read</div></div>
+  <nav class="nav reveal">__NAV__</nav>
+  <div class="sheet">__SECTIONS__</div>
+  <div class="foot"><b>The AI Dispatch</b>Delivered daily at 9:00 AM IST &middot; Aggregated from 30+ AI news &amp; research sources</div>
+</div>
+<script>__JS__</script></body></html>"""
+
+
+def build_web(digest: dict) -> str:
+    total = sum(len(v) for v in digest.values())
+    read_min = max(2, round(total * 0.4))
+    nav = "".join(
+        f'<a href="#{_slug(c)}" data-t="{_slug(c)}">{_he(CAT_LABEL.get(c, _clean(c)))}'
+        f'<span>{len(v)}</span></a>'
+        for c, v in digest.items())
+    secs = ""
+    first = True
+    for c, items in digest.items():
+        acc = WEB_ACCENT.get(c, "#7C5CFF")
+        lbl = _he(CAT_LABEL.get(c, _clean(c)))
+        tag = _he(CAT_TAGLINES.get(c, ""))
+        stories = ""
+        for i, it in enumerate(items, 1):
+            lead = " lead" if (first and i == 1) else ""
+            img = (it.get("image") or "").strip()
+            imgtag = (f'<img loading="lazy" src="{_url(img)}" alt="">'
+                      if img.lower().startswith(("http://", "https://")) else "")
+            roles = "".join(f"<span>{_he(r)}</span>" for r in it.get("roles", [])[:3])
+            tags = f'<div class="tags">{roles}</div>' if roles else ""
+            link = _url(it.get("link", "#"))
+            stories += (
+                f'<article class="story{lead} reveal">'
+                f'<div class="m"><span class="num" style="color:{acc}">{i:02d}</span>'
+                f'<span class="src">{_he(it.get("source", ""))}</span></div>'
+                f'<h3><a href="{link}" target="_blank" rel="noopener">{_he(it.get("title", ""))}</a></h3>'
+                f'{imgtag}<p>{_he(it.get("summary", ""))}</p>{tags}'
+                f'<a class="more" style="color:{acc}" href="{link}" target="_blank" rel="noopener">'
+                f'Read the full story &rarr;</a></article>')
+        secs += (
+            f'<section id="{_slug(c)}" style="--acc:{acc}">'
+            f'<header class="sec-h reveal"><span class="kick">{lbl}</span>'
+            f'<span class="cnt">{tag} &nbsp;&middot;&nbsp; {len(items)} stories</span></header>'
+            f'{stories}</section>')
+        first = False
+    today = date.today().strftime("%A, %B %d, %Y").upper()
+    return (_WEB_TEMPLATE
+            .replace("__CSS__", _WEB_CSS).replace("__JS__", _WEB_JS)
+            .replace("__NAV__", nav).replace("__SECTIONS__", secs)
+            .replace("__DATE__", _he(today))
+            .replace("__TOTAL__", str(total)).replace("__READ__", str(read_min)))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -516,7 +682,7 @@ def send_email(html_content: str, pdf_bytes: bytes, item_count: int):
     recipients = [e.strip() for e in re.split(r"[,;]+", TO_EMAIL) if e.strip()]
 
     msg = MIMEMultipart("mixed")
-    msg["Subject"] = f"🧠 AI Briefing {today_str} — {item_count} updates inside"
+    msg["Subject"] = f"AI Briefing // {today_str} — {item_count} updates inside"
     msg["From"]    = GMAIL_USER
     msg["To"]      = ", ".join(recipients)
 
@@ -556,6 +722,12 @@ if __name__ == "__main__":
     print("Generating PDF...")
     pdf_bytes = build_pdf(digest)
     print(f"PDF size: {len(pdf_bytes)//1024} KB")
+
+    print("Building web edition...")
+    os.makedirs("public", exist_ok=True)
+    with open(os.path.join("public", "index.html"), "w", encoding="utf-8") as f:
+        f.write(build_web(digest))
+    print("Web edition -> public/index.html")
 
     # Save PDF locally for inspection (great for testing without email)
     today_file = date.today().strftime("%Y-%m-%d")

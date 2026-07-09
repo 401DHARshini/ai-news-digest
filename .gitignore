@@ -4,6 +4,12 @@
 # Generated digests
 AI-Briefing-*.pdf
 
+# Generated web edition (published to Pages by CI)
+public/
+
+# Local preview config
+.claude/
+
 # Python
 __pycache__/
 *.pyc
