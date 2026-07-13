@@ -447,52 +447,70 @@ WEB_ACCENT = {
 
 _WEB_CSS = r"""
 *{box-sizing:border-box;margin:0;padding:0}
-:root{--ink:#2A2340;--body:#544B6E;--muted:#8B84A3;--line:rgba(42,35,64,0.10)}
-html{scroll-behavior:smooth;scroll-padding-top:96px}
-body{font-family:'Spline Sans',sans-serif;color:var(--body);background:#F1ECFA;line-height:1.66;-webkit-font-smoothing:antialiased;overflow-x:hidden}
-.aurora{position:fixed;inset:-25% -15%;z-index:-2;filter:blur(72px);opacity:.92}
-.aurora i{position:absolute;border-radius:50%;mix-blend-mode:multiply;animation:drift 24s ease-in-out infinite}
-.aurora .a{width:54vw;height:54vw;left:-8vw;top:-12vw;background:radial-gradient(circle,#FFB49E,transparent 62%)}
-.aurora .b{width:50vw;height:50vw;right:-8vw;top:-6vw;background:radial-gradient(circle,#FF8FC7,transparent 62%);animation-delay:-7s}
-.aurora .c{width:52vw;height:52vw;left:8vw;top:42vh;background:radial-gradient(circle,#B39DFF,transparent 62%);animation-delay:-13s}
-.aurora .d{width:46vw;height:46vw;right:-4vw;bottom:-6vh;background:radial-gradient(circle,#8FD0FF,transparent 62%);animation-delay:-18s}
-@keyframes drift{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(4vw,3vh) scale(1.08)}66%{transform:translate(-3vw,-2vh) scale(.95)}}
-.wrap{max-width:720px;margin:0 auto;padding:0 20px 90px}
-.mast{text-align:center;padding:66px 0 24px}
-.mast .kick{font-size:12px;font-weight:600;letter-spacing:4px;text-transform:uppercase;color:#C0398B}
-.mast h1{font-family:'Fraunces',serif;font-weight:900;font-size:66px;line-height:.96;color:var(--ink);letter-spacing:-2.4px;margin:16px 0 14px}
-.mast .sub{font-size:12.5px;letter-spacing:2.4px;text-transform:uppercase;color:var(--muted)}
-.nav{position:sticky;top:14px;z-index:10;display:flex;flex-wrap:wrap;gap:7px;justify-content:center;padding:11px;border-radius:20px;background:rgba(255,255,255,.5);backdrop-filter:blur(18px) saturate(1.5);-webkit-backdrop-filter:blur(18px) saturate(1.5);border:1px solid rgba(255,255,255,.7);box-shadow:0 14px 44px rgba(42,35,64,.12);margin-bottom:14px}
-.nav a{font-size:13px;font-weight:600;color:var(--ink);text-decoration:none;padding:7px 13px;border-radius:13px;transition:.25s;white-space:nowrap}
-.nav a span{opacity:.45;margin-left:5px;font-variant-numeric:tabular-nums}
-.nav a:hover{background:rgba(255,255,255,.75)}
-.nav a.active{color:#fff;background:var(--ink)}
-.sheet{background:rgba(255,255,255,.52);backdrop-filter:blur(22px) saturate(1.35);-webkit-backdrop-filter:blur(22px) saturate(1.35);border:1px solid rgba(255,255,255,.7);border-radius:28px;padding:42px 46px;box-shadow:0 34px 90px rgba(42,35,64,.13)}
-section{padding:32px 0 6px;scroll-margin-top:96px}
-.sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:14px;margin-bottom:24px;border-bottom:1px solid var(--line);padding-bottom:12px}
-.sec-h .kick{font-size:13px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--acc)}
-.sec-h .cnt{font-size:12px;color:var(--muted);text-align:right;white-space:nowrap}
-.story{padding:26px 0;border-bottom:1px solid var(--line)}
-.story:last-child{border-bottom:0}
-.story .m{display:flex;align-items:center;gap:12px;margin-bottom:6px}
-.story .num{font-family:'Fraunces',serif;font-weight:900;font-size:26px;line-height:1}
-.story .src{font-size:11px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted)}
-.story h3{font-family:'Fraunces',serif;font-weight:600;font-size:28px;line-height:1.18;letter-spacing:-.6px;margin:2px 0 0}
-.story h3 a{color:var(--ink);text-decoration:none;background:linear-gradient(var(--acc),var(--acc)) no-repeat left 100%/0% 2px;transition:background-size .4s;padding-bottom:3px}
-.story h3 a:hover{background-size:100% 2px}
-.story img{width:100%;height:auto;display:block;border-radius:16px;margin:18px 0 2px;box-shadow:0 20px 48px rgba(42,35,64,.2);transition:.45s}
-.story img:hover{transform:translateY(-4px);box-shadow:0 30px 66px rgba(42,35,64,.28)}
-.story p{font-size:16px;color:var(--body);margin-top:14px}
-.story.lead p::first-letter{font-family:'Fraunces',serif;font-weight:900;font-size:60px;float:left;line-height:.78;padding:9px 11px 0 0;color:var(--acc)}
-.tags{margin-top:13px;display:flex;flex-wrap:wrap;gap:6px}
-.tags span{font-size:11px;font-weight:600;color:var(--acc);background:color-mix(in srgb,var(--acc) 13%,white);padding:3px 10px;border-radius:20px}
-.more{display:inline-block;margin-top:15px;font-size:13px;font-weight:700;text-decoration:none;transition:.25s}
-.more:hover{letter-spacing:1px}
-.reveal{opacity:0;transform:translateY(24px);transition:.75s cubic-bezier(.2,.7,.2,1)}
+:root{
+  --green:#5C8A3A;      /* brand green (genai.works family) */
+  --green-d:#436627;    /* darker green for hover / emphasis */
+  --lime:#B1E882;       /* bright accent */
+  --lime-soft:#EAF6DC;  /* pale green wash for chips & tags */
+  --ink:#141A12;        /* headline near-black */
+  --body:#414A3B;       /* body copy */
+  --muted:#889082;      /* meta / captions */
+  --line:#E7EBE1;       /* hairlines & card borders */
+  --card:#FFFFFF;
+  --bg:#F4F7EF;         /* page background */
+}
+html{scroll-behavior:smooth;scroll-padding-top:92px}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:var(--body);background:var(--bg);line-height:1.62;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.wrap{max-width:760px;margin:0 auto;padding:0 18px 80px}
+
+/* masthead */
+.mast{text-align:center;padding:54px 0 20px}
+.mast .kick{display:inline-block;font-size:11px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--green-d);background:var(--lime-soft);padding:7px 16px;border-radius:999px}
+.mast h1{font-size:52px;font-weight:800;line-height:1.02;color:var(--ink);letter-spacing:-1.8px;margin:18px 0 0}
+.mast h1 .dot{color:var(--green)}
+.mast .rule{width:60px;height:4px;background:var(--green);border-radius:4px;margin:16px auto 14px}
+.mast .sub{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}
+
+/* sticky category nav — the "table of contents" you click to jump */
+.nav{position:sticky;top:10px;z-index:20;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:10px;border-radius:16px;background:rgba(255,255,255,.9);backdrop-filter:blur(14px) saturate(1.4);-webkit-backdrop-filter:blur(14px) saturate(1.4);border:1px solid var(--line);box-shadow:0 8px 28px rgba(20,26,18,.09);margin-bottom:12px}
+.nav a{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--ink);text-decoration:none;padding:7px 13px;border-radius:11px;transition:.2s;white-space:nowrap}
+.nav a .cdot{width:8px;height:8px;border-radius:50%;background:var(--acc,#5C8A3A);flex:none}
+.nav a span{color:var(--muted);font-variant-numeric:tabular-nums}
+.nav a:hover{background:var(--lime-soft)}
+.nav a.active{background:var(--green);color:#fff}
+.nav a.active span{color:rgba(255,255,255,.72)}
+.nav a.active .cdot{background:#fff}
+
+/* section header */
+section{padding:30px 0 4px;scroll-margin-top:92px}
+.sec-h{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.sec-h .chip{display:inline-flex;align-items:center;font-size:12px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#fff;background:var(--acc);padding:7px 15px;border-radius:999px;white-space:nowrap}
+.sec-h .tag{font-size:13px;color:var(--muted);flex:1;line-height:1.4}
+.sec-h .cnt{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+
+/* story card — each news item stands alone */
+.story{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--acc);border-radius:14px;padding:22px 24px;margin-bottom:14px;box-shadow:0 1px 2px rgba(20,26,18,.04);transition:transform .25s,box-shadow .25s}
+.story:hover{transform:translateY(-2px);box-shadow:0 16px 36px rgba(20,26,18,.10)}
+.story .m{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.story .num{font-size:13px;font-weight:800;color:var(--acc);font-variant-numeric:tabular-nums}
+.story .src{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.story h3{font-size:20px;font-weight:700;line-height:1.28;letter-spacing:-.3px;margin:0}
+.story h3 a{color:var(--ink);text-decoration:none;transition:color .2s}
+.story h3 a:hover{color:var(--green)}
+.story img{width:100%;height:auto;display:block;border-radius:10px;margin:14px 0 2px;border:1px solid var(--line)}
+.story p{font-size:15px;color:var(--body);margin-top:10px}
+.tags{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
+.tags span{font-size:11px;font-weight:600;color:var(--green-d);background:var(--lime-soft);padding:3px 10px;border-radius:999px}
+.more{display:inline-block;margin-top:13px;font-size:13px;font-weight:700;color:var(--green);text-decoration:none;transition:color .2s}
+.more:hover{color:var(--green-d)}
+
+/* reveal-on-scroll + footer */
+.reveal{opacity:0;transform:translateY(16px);transition:.6s cubic-bezier(.2,.7,.2,1)}
 .reveal.in{opacity:1;transform:none}
-.foot{text-align:center;padding:46px 10px 0;color:var(--muted);font-size:13px}
-.foot b{font-family:'Fraunces',serif;color:var(--ink);font-size:19px;font-weight:600;display:block;margin-bottom:6px}
-@media(max-width:560px){.mast h1{font-size:44px}.sheet{padding:26px 20px}.story h3{font-size:22px}.nav{gap:5px;padding:9px}}
+.foot{text-align:center;padding:40px 10px 0;margin-top:26px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+.foot b{color:var(--ink);font-size:18px;font-weight:800;display:block;margin-bottom:6px}
+.foot b .dot{color:var(--green)}
+@media(max-width:560px){.mast h1{font-size:36px}.story{padding:18px 18px}.story h3{font-size:18px}.sec-h{flex-wrap:wrap;gap:8px}.nav{gap:6px;padding:8px}}
 """
 
 _WEB_JS = r"""
@@ -507,15 +525,14 @@ _WEB_TEMPLATE = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>The AI Dispatch</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>__CSS__</style></head>
 <body>
-<div class="aurora"><i class="a"></i><i class="b"></i><i class="c"></i><i class="d"></i></div>
 <div class="wrap">
-  <div class="mast reveal"><div class="kick">Artificial Intelligence &middot; Daily Edition</div><h1>The AI Dispatch</h1><div class="sub">__DATE__ &middot; __TOTAL__ stories &middot; __READ__ min read</div></div>
+  <div class="mast reveal"><div class="kick">Artificial Intelligence &middot; Daily Edition</div><h1>The AI Dispatch<span class="dot">.</span></h1><div class="rule"></div><div class="sub">__DATE__ &middot; __TOTAL__ stories &middot; __READ__ min read</div></div>
   <nav class="nav reveal">__NAV__</nav>
-  <div class="sheet">__SECTIONS__</div>
-  <div class="foot"><b>The AI Dispatch</b>Delivered daily at 9:00 AM IST &middot; Aggregated from 30+ AI news &amp; research sources</div>
+  __SECTIONS__
+  <div class="foot"><b>The AI Dispatch<span class="dot">.</span></b>Delivered daily at 9:00 AM IST &middot; Aggregated from 30+ AI news &amp; research sources</div>
 </div>
 <script>__JS__</script></body></html>"""
 
@@ -524,18 +541,17 @@ def build_web(digest: dict) -> str:
     total = sum(len(v) for v in digest.values())
     read_min = max(2, round(total * 0.4))
     nav = "".join(
-        f'<a href="#{_slug(c)}" data-t="{_slug(c)}">{_he(CAT_LABEL.get(c, _clean(c)))}'
+        f'<a href="#{_slug(c)}" data-t="{_slug(c)}" style="--acc:{WEB_ACCENT.get(c, "#5C8A3A")}">'
+        f'<i class="cdot"></i>{_he(CAT_LABEL.get(c, _clean(c)))}'
         f'<span>{len(v)}</span></a>'
         for c, v in digest.items())
     secs = ""
-    first = True
     for c, items in digest.items():
-        acc = WEB_ACCENT.get(c, "#7C5CFF")
+        acc = WEB_ACCENT.get(c, "#5C8A3A")
         lbl = _he(CAT_LABEL.get(c, _clean(c)))
         tag = _he(CAT_TAGLINES.get(c, ""))
         stories = ""
         for i, it in enumerate(items, 1):
-            lead = " lead" if (first and i == 1) else ""
             img = (it.get("image") or "").strip()
             imgtag = (f'<img loading="lazy" src="{_url(img)}" alt="">'
                       if img.lower().startswith(("http://", "https://")) else "")
@@ -543,19 +559,19 @@ def build_web(digest: dict) -> str:
             tags = f'<div class="tags">{roles}</div>' if roles else ""
             link = _url(it.get("link", "#"))
             stories += (
-                f'<article class="story{lead} reveal">'
-                f'<div class="m"><span class="num" style="color:{acc}">{i:02d}</span>'
+                f'<article class="story reveal">'
+                f'<div class="m"><span class="num">{i:02d}</span>'
                 f'<span class="src">{_he(it.get("source", ""))}</span></div>'
                 f'<h3><a href="{link}" target="_blank" rel="noopener">{_he(it.get("title", ""))}</a></h3>'
                 f'{imgtag}<p>{_he(it.get("summary", ""))}</p>{tags}'
-                f'<a class="more" style="color:{acc}" href="{link}" target="_blank" rel="noopener">'
+                f'<a class="more" href="{link}" target="_blank" rel="noopener">'
                 f'Read the full story &rarr;</a></article>')
         secs += (
             f'<section id="{_slug(c)}" style="--acc:{acc}">'
-            f'<header class="sec-h reveal"><span class="kick">{lbl}</span>'
-            f'<span class="cnt">{tag} &nbsp;&middot;&nbsp; {len(items)} stories</span></header>'
+            f'<header class="sec-h reveal"><span class="chip">{lbl}</span>'
+            f'<span class="tag">{tag}</span>'
+            f'<span class="cnt">{len(items)} stories</span></header>'
             f'{stories}</section>')
-        first = False
     today = date.today().strftime("%A, %B %d, %Y").upper()
     return (_WEB_TEMPLATE
             .replace("__CSS__", _WEB_CSS).replace("__JS__", _WEB_JS)
