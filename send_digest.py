@@ -60,6 +60,10 @@ CAT_STYLE = {
 
 CAT_TAGLINES = {
     "🤖 Model Updates":           "New model versions, capabilities & benchmarks dropped today",
+    "☁️ Cloud AI":                "New models and AI services on Azure, AWS and Google Cloud",
+    "🗄️ Data & Databricks":       "Databricks, Snowflake, vector search, RAG and the data layer",
+    "🛠️ Dev Tools & Agents":      "Coding assistants, agent frameworks, SDKs and new APIs",
+    "🧪 Testing & Evals":         "AI testing, benchmarks, evaluations and reliability",
     "🚀 New Launch / Feature":    "Fresh tools, APIs & features you can use right now",
     "🔬 R&D / Research":          "What labs & universities are building behind the scenes",
     "✅ Good News / Wins":         "Funding, partnerships & breakthroughs worth celebrating",
@@ -71,6 +75,10 @@ CAT_TAGLINES = {
 # Emoji-free category labels + modern accent colours (email UI)
 CAT_LABEL = {
     "🤖 Model Updates":           "Model Updates",
+    "☁️ Cloud AI":                "Cloud AI",
+    "🗄️ Data & Databricks":       "Data & Databricks",
+    "🛠️ Dev Tools & Agents":      "Dev Tools & Agents",
+    "🧪 Testing & Evals":         "Testing & Evals",
     "🚀 New Launch / Feature":    "New Launches",
     "🔬 R&D / Research":          "R&D / Research",
     "✅ Good News / Wins":         "Good News",
@@ -255,6 +263,10 @@ WEB_URL = "https://401dharshini.github.io/ai-news-digest/"
 
 WEB_ACCENT = {
     "🤖 Model Updates":           "#7C5CFF",
+    "☁️ Cloud AI":                "#2563EB",
+    "🗄️ Data & Databricks":       "#0D9488",
+    "🛠️ Dev Tools & Agents":      "#9333EA",
+    "🧪 Testing & Evals":         "#CA8A04",
     "🚀 New Launch / Feature":    "#FF6B4A",
     "🔬 R&D / Research":          "#00B8D9",
     "✅ Good News / Wins":         "#22C55E",

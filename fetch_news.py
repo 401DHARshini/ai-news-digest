@@ -59,6 +59,14 @@ RSS_FEEDS = [
     "https://aws.amazon.com/blogs/machine-learning/feed/",
     "https://azure.microsoft.com/en-us/blog/tag/ai/feed/",
     "https://cloud.google.com/blog/products/ai-machine-learning/rss",
+
+    # ── Cloud / Data / Platform AI ─────────────────────────────────
+    "https://www.databricks.com/blog/feed",
+    "https://www.snowflake.com/en/blog/feed/",
+    "https://aws.amazon.com/blogs/big-data/feed/",
+    "https://developer.nvidia.com/blog/feed/",
+    "https://blog.langchain.dev/rss/",
+    "https://www.pinecone.io/learn/rss.xml",
 ]
 
 NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "")  # optional, free tier key
@@ -78,6 +86,30 @@ LOOKBACK_HOURS = 26  # slightly over 24h so a daily cron never misses items
 # ---------------------------------------------------------------------
 
 CATEGORY_RULES = {
+    "☁️ Cloud AI": [
+        "azure ai", "azure openai", "ai foundry", "aws bedrock", "amazon bedrock",
+        "sagemaker", "vertex ai", "google vertex", "watsonx", "bedrock", "vertex",
+        "azure machine learning", "google cloud ai", "oracle ai", "cloud ai platform",
+    ],
+    "🗄️ Data & Databricks": [
+        "databricks", "snowflake", "lakehouse", "mosaic ai", "unity catalog",
+        "delta lake", "vector database", "vector db", "pinecone", "weaviate",
+        "qdrant", "chroma", "milvus", "feature store", "mlflow", "dbt ",
+        "data warehouse", "data pipeline", "data engineering", "retrieval augmented",
+    ],
+    "🧪 Testing & Evals": [
+        "benchmark", "eval ", "evals", "evaluation", "leaderboard", "red team",
+        "red-team", "swe-bench", "mmlu", "hallucination", "guardrail", "robustness",
+        "adversarial", "regression test", "test coverage", "qa automation",
+        "software testing", "model evaluation", "reliability testing", "safety testing",
+    ],
+    "🛠️ Dev Tools & Agents": [
+        "sdk", "coding assistant", "code assistant", "copilot", "github copilot",
+        "cursor", "windsurf", "devin", "agent framework", "agentic framework",
+        "langchain", "llamaindex", "llama index", "autogen", "crewai", "cli tool",
+        "developer tool", "function calling", "mcp ", "model context protocol",
+        "open source library", "new api", "new sdk", "plugin", "ide ",
+    ],
     "🤖 Model Updates": [
         "gpt-", "gpt4", "gpt5", "claude 3", "claude 4", "gemini 2", "gemini ultra",
         "llama 3", "llama 4", "mistral ", "phi-", "phi ", "qwen", "deepseek",
@@ -356,6 +388,8 @@ def enrich_digest(digest: dict) -> None:
     powered = 0
     for items in digest.values():
         for it in items:
+            if it.get("tracked"):
+                continue
             res = ai_enrich(it["title"], it.get("summary", ""))
             if res:
                 it["summary"] = res["summary"]
@@ -366,8 +400,15 @@ def enrich_digest(digest: dict) -> None:
     print(f"[ai] enriched {powered}/{total} stories with an LLM summary")
 
 
-def collect_digest(max_per_category: int = 6):
-    all_items = fetch_rss_items() + fetch_newsapi_items()
+def collect_digest(max_per_category: int = 5):
+    tracker_items = []
+    try:
+        from model_tracker import new_model_items
+        tracker_items = new_model_items()[:3]   # keep state; show at most 3 so real news isn't crowded out
+    except Exception as e:
+        print(f"[tracker] skipped: {e}")
+
+    all_items = tracker_items + fetch_rss_items() + fetch_newsapi_items()
     all_items = dedupe(all_items)
 
     grouped = {}
@@ -377,6 +418,10 @@ def collect_digest(max_per_category: int = 6):
     # category display order — model updates first, awareness last
     order = [
         "🤖 Model Updates",
+        "☁️ Cloud AI",
+        "🗄️ Data & Databricks",
+        "🛠️ Dev Tools & Agents",
+        "🧪 Testing & Evals",
         "🚀 New Launch / Feature",
         "🔬 R&D / Research",
         "✅ Good News / Wins",

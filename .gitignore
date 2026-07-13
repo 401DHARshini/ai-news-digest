@@ -7,6 +7,9 @@ AI-Briefing-*.pdf
 # Generated web edition (published to Pages by CI)
 public/
 
+# Model-tracker state (persisted via Actions cache in CI)
+state/
+
 # Local preview config
 .claude/
 

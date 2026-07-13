@@ -27,6 +27,14 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Restore model-tracker state
+        uses: actions/cache@v4
+        with:
+          path: state
+          key: model-state-${{ github.run_id }}
+          restore-keys: |
+            model-state-
+
       - name: Send daily digest + build web edition
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
