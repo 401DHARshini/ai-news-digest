@@ -4,6 +4,10 @@
 # Generated digests
 AI-Briefing-*.pdf
 
+# Generated local previews
+email-preview.html
+*-preview.pdf
+
 # Generated web edition (published to Pages by CI)
 public/
 

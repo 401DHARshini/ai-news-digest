@@ -80,6 +80,7 @@ AI_KEYWORDS = [
 ]
 
 LOOKBACK_HOURS = 26  # slightly over 24h so a daily cron never misses items
+INSIGHT_LOOKBACK_HOURS = 168  # the Pulse dashboard mines a trailing week of articles
 
 # ---------------------------------------------------------------------
 # 2. CATEGORY KEYWORD RULES
@@ -248,15 +249,23 @@ def crisp_summary(title: str, summary: str, max_chars: int = 340) -> str:
     return window.rsplit(" ", 1)[0].strip() + "…"
 
 
+# Promo/ad assets that sneak into RSS bodies — never use them as story art.
+_AD_IMAGE_RE = re.compile(r"banner|sponsor|advert|promo|expo|badge|logo|avatar|gravatar",
+                          re.IGNORECASE)
+
+
 def extract_image(entry) -> str:
     """Best-effort thumbnail URL from an RSS entry (media tags, enclosure, inline img)."""
+    def ok(url):
+        return url and not _AD_IMAGE_RE.search(url)
+
     for key in ("media_thumbnail", "media_content"):
         for m in (entry.get(key) or []):
             url = (m or {}).get("url")
-            if url:
+            if ok(url):
                 return url
     for link in (entry.get("links") or []):
-        if str(link.get("type", "")).startswith("image") and link.get("href"):
+        if str(link.get("type", "")).startswith("image") and ok(link.get("href")):
             return link["href"]
     blob = ""
     if entry.get("content"):
@@ -265,8 +274,10 @@ def extract_image(entry) -> str:
         except Exception:
             blob = ""
     blob = blob or entry.get("summary", "") or entry.get("description", "")
-    m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', blob, re.IGNORECASE)
-    return m.group(1) if m else ""
+    for m in re.finditer(r'<img[^>]+src=["\']([^"\']+)["\']', blob, re.IGNORECASE):
+        if ok(m.group(1)):
+            return m.group(1)
+    return ""
 
 
 def is_ai_related(text: str) -> bool:
@@ -274,11 +285,11 @@ def is_ai_related(text: str) -> bool:
     return any(kw in t for kw in AI_KEYWORDS)
 
 
-def within_lookback(published_struct) -> bool:
+def within_lookback(published_struct, hours: int = LOOKBACK_HOURS) -> bool:
     if not published_struct:
         return True  # keep items with no date rather than drop them
     pub_dt = datetime(*published_struct[:6], tzinfo=timezone.utc)
-    return pub_dt > datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
+    return pub_dt > datetime.now(timezone.utc) - timedelta(hours=hours)
 
 
 # ---------------------------------------------------------------------
@@ -297,7 +308,9 @@ def fetch_rss_items():
                 link = entry.get("link", "")
                 published_struct = entry.get("published_parsed") or entry.get("updated_parsed")
 
-                if not within_lookback(published_struct):
+                # Keep a trailing week for trend mining; only items inside the
+                # daily window ("fresh") are eligible for the digest itself.
+                if not within_lookback(published_struct, INSIGHT_LOOKBACK_HOURS):
                     continue
                 if "arxiv" not in feed_url and not is_ai_related(f"{title} {summary}"):
                     continue
@@ -314,6 +327,7 @@ def fetch_rss_items():
                     "category": categorize(combined),
                     "roles": tag_roles(combined),
                     "ai_powered": False,
+                    "fresh": within_lookback(published_struct),
                 })
         except Exception as e:
             print(f"[warn] failed to parse {feed_url}: {e}")
@@ -400,7 +414,10 @@ def enrich_digest(digest: dict) -> None:
     print(f"[ai] enriched {powered}/{total} stories with an LLM summary")
 
 
-def collect_digest(max_per_category: int = 5):
+def collect_digest(max_per_category: int = 5, with_insights: bool = False):
+    """Collect the trimmed digest; with_insights=True also returns the
+    dashboard signals mined from EVERY scanned article (see insights.py),
+    as a (digest, insights) tuple."""
     tracker_items = []
     try:
         from model_tracker import new_model_items
@@ -411,9 +428,12 @@ def collect_digest(max_per_category: int = 5):
     all_items = tracker_items + fetch_rss_items() + fetch_newsapi_items()
     all_items = dedupe(all_items)
 
+    # The digest shows only fresh (last ~26h) stories; the full trailing-week
+    # set feeds the Pulse dashboard (insights) below.
     grouped = {}
     for it in all_items:
-        grouped.setdefault(it["category"], []).append(it)
+        if it.get("fresh", True):
+            grouped.setdefault(it["category"], []).append(it)
 
     # category display order — model updates first, awareness last
     order = [
@@ -438,6 +458,13 @@ def collect_digest(max_per_category: int = 5):
         print("Enriching summaries with AI (free multi-model fallback)...")
         enrich_digest(final)
 
+    if with_insights:
+        try:
+            from insights import mine_insights
+            return final, mine_insights(all_items)
+        except Exception as e:
+            print(f"[insights] skipped: {e}")
+            return final, {}
     return final
 
 

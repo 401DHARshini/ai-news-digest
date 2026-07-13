@@ -59,17 +59,17 @@ CAT_STYLE = {
 }
 
 CAT_TAGLINES = {
-    "🤖 Model Updates":           "New model versions, capabilities & benchmarks dropped today",
-    "☁️ Cloud AI":                "New models and AI services on Azure, AWS and Google Cloud",
-    "🗄️ Data & Databricks":       "Databricks, Snowflake, vector search, RAG and the data layer",
-    "🛠️ Dev Tools & Agents":      "Coding assistants, agent frameworks, SDKs and new APIs",
-    "🧪 Testing & Evals":         "AI testing, benchmarks, evaluations and reliability",
-    "🚀 New Launch / Feature":    "Fresh tools, APIs & features you can use right now",
-    "🔬 R&D / Research":          "What labs & universities are building behind the scenes",
-    "✅ Good News / Wins":         "Funding, partnerships & breakthroughs worth celebrating",
-    "⚠️ Bad News / Risk":          "Risks, failures & controversies to keep an eye on",
-    "💡 AI Awareness / Must Know": "Big-picture trends every tech person should know",
-    "📰 General AI Update":        "Everything else worth knowing today",
+    "🤖 Model Updates":           "fresh model drops, glow-ups and benchmark bragging rights",
+    "☁️ Cloud AI":                "what sprouted overnight on Azure, AWS and Google Cloud",
+    "🗄️ Data & Databricks":       "the data layer — lakehouses, vectors, RAG and other plumbing",
+    "🛠️ Dev Tools & Agents":      "new toys for builders: agents, SDKs, copilots and friends",
+    "🧪 Testing & Evals":         "who's actually measuring this stuff (bless them)",
+    "🚀 New Launch / Feature":    "shipped today — things you can go poke at right now",
+    "🔬 R&D / Research":          "seeds the labs are planting for next season",
+    "✅ Good News / Wins":         "sunshine: funding rounds, wins and feel-good ships",
+    "⚠️ Bad News / Risk":          "storm clouds worth watching (umbrella optional)",
+    "💡 AI Awareness / Must Know": "the big-picture stuff to casually drop at lunch",
+    "📰 General AI Update":        "everything else that grew in the garden today",
 }
 
 # Emoji-free category labels + modern accent colours (email UI)
@@ -97,17 +97,37 @@ CAT_ACCENT = {
 }
 
 # Shared font stacks (render reliably across email clients)
-SANS = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+SANS  = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
 SERIF = "Georgia,'Iowan Old Style','Times New Roman',serif"
 
-# Editorial "AI Dispatch" email palette — one dominant accent, warm paper
-E_PAPER  = "#EFEADD"
-E_CARD   = "#FCFAF4"
-E_INK    = "#1A1712"
-E_BODY   = "#4A453B"
-E_MUTED  = "#8C8578"
-E_RULE   = "#DBD4C4"
-E_ACCENT = "#C63F1E"
+# "Morning Canopy" palette — serene, natural, hopeful. Shared by email AND PDF.
+E_PAPER   = "#F3F5EC"   # misty morning air behind the card
+E_CARD    = "#FFFFFF"   # the page itself
+E_PANEL   = "#F6F9EE"   # dew-tinted panels (dashboard, chips)
+E_INK     = "#243018"   # deep forest ink
+E_BODY    = "#4A5540"   # body copy
+E_MUTED   = "#8B947E"   # captions / labels
+E_RULE    = "#E2E8D4"   # hairlines
+E_ACCENT  = "#648741"   # moss — primary accent
+E_ACCENT2 = "#B1E882"   # spring leaf — gradient partner
+E_CLAY    = "#EA965C"   # warm clay — sparing warm touch
+E_GRAD    = f"linear-gradient(90deg,{E_ACCENT},{E_ACCENT2})"
+
+# Natural tone per category (numbers, section kickers) — email + PDF.
+# Each always appears beside its printed name, never as the only identifier.
+NEON = {
+    "🤖 Model Updates":           "#648741",   # moss
+    "☁️ Cloud AI":                "#2E7DB3",   # lake
+    "🗄️ Data & Databricks":       "#14876B",   # pine
+    "🛠️ Dev Tools & Agents":      "#7B5FC0",   # wildflower
+    "🧪 Testing & Evals":         "#C77F0A",   # honey
+    "🚀 New Launch / Feature":    "#C2417F",   # berry
+    "🔬 R&D / Research":          "#5C8A2E",   # sprout
+    "✅ Good News / Wins":         "#3F9C5B",   # meadow
+    "⚠️ Bad News / Risk":          "#D14B32",   # terracotta storm
+    "💡 AI Awareness / Must Know": "#B98514",   # amber
+    "📰 General AI Update":        "#7C8577",   # river stone
+}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -129,90 +149,239 @@ def _slug(category: str) -> str:
     return "sec-" + (re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "x")
 
 
-def _img(it: dict) -> str:
-    img = (it.get("image") or "").strip()
-    if img.lower().startswith(("http://", "https://")):
-        return (f'<img src="{_url(img)}" width="600" alt="" '
-                f'style="width:100%;max-width:100%;height:auto;display:block;margin:15px 0 2px;">')
-    return ""  # editorial flow simply omits missing images — no filler boxes
+# Leaf shape: opposite corners rounded, opposite corners pinched.
+_LEAF = "16px 4px 16px 4px"
+_LEAF_R = "4px 16px 4px 16px"
 
 
-def _role_line(roles: list) -> str:
+def _role_chips(roles: list, accent: str) -> str:
     names = [_he(name) for name, on in _role_flags(roles) if on]
     if not names:
         return ""
-    txt = " &middot; ".join(names)
-    return (f'<div style="font-family:{SANS};font-size:10.5px;font-weight:700;color:{E_MUTED};'
-            f'text-transform:uppercase;letter-spacing:1.2px;margin:13px 0 0;">Relevant for&nbsp;&nbsp; {txt}</div>')
+    chips = "".join(
+        f'<span style="display:inline-block;font-family:{SANS};font-size:11px;font-weight:600;'
+        f'color:{accent};background:{E_PANEL};border:1px solid {E_RULE};'
+        f'border-radius:{_LEAF};padding:5px 12px;margin:0 6px 6px 0;">{n}</span>'
+        for n in names)
+    return f'<div style="margin:14px 0 0;">{chips}</div>'
 
 
-def _article(it: dict, num: int, lead: bool = False) -> str:
+def _dashed_rule() -> str:
+    return (f'<div style="border-top:1px dashed {E_RULE};'
+            f'margin:24px 12px 24px;font-size:0;line-height:0;">&nbsp;</div>')
+
+
+def _article_hero(it: dict, num: int, accent: str, lead: bool = False) -> str:
+    """Section opener: full-width image, big serif headline, drop cap on the lead."""
     link = _url(it.get("link", "#"))
-    title_size = 28 if lead else 20
+    img = (it.get("image") or "").strip()
+    imgtag = ""
+    if img.lower().startswith(("http://", "https://")):
+        imgtag = (f'<a href="{link}"><img src="{_url(img)}" width="552" alt="" '
+                  f'style="width:100%;max-width:100%;height:auto;display:block;'
+                  f'border-radius:22px 22px 22px 5px;margin:0 0 16px;"></a>')
+    title_size = 27 if lead else 22
     summary = _he(it.get("summary", ""))
     if lead and summary:
-        summary = (f'<span style="font-family:{SERIF};font-size:46px;font-weight:700;color:{E_ACCENT};'
-                   f'line-height:0.82;float:left;padding:6px 9px 0 0;">{summary[0]}</span>{summary[1:]}')
+        summary = (f'<span style="font-family:{SERIF};font-size:44px;font-weight:700;color:{accent};'
+                   f'line-height:0.85;float:left;padding:5px 8px 0 0;">{summary[0]}</span>{summary[1:]}')
     return f"""
-    <div style="margin:0 0 22px;">
-      <div style="margin:0 0 6px;">
-        <span style="font-family:{SERIF};font-size:15px;font-weight:700;color:{E_ACCENT};">{num:02d}</span>
-        <span style="font-family:{SANS};font-size:10.5px;font-weight:700;color:{E_MUTED};text-transform:uppercase;letter-spacing:1.2px;margin-left:9px;">{_he(it.get('source',''))}</span>
+    <div style="margin:0 0 6px;">
+      {imgtag}
+      <div style="margin:0 0 8px;">
+        <span style="font-family:{SERIF};font-size:16px;font-weight:700;font-style:italic;color:{accent};">No.{num:02d}</span>
+        <span style="font-family:{SANS};font-size:10.5px;font-weight:700;color:{E_MUTED};letter-spacing:1.8px;text-transform:uppercase;">&nbsp;&nbsp;{_he(it.get('source',''))}</span>
       </div>
-      <div style="font-family:{SERIF};font-size:{title_size}px;font-weight:700;color:{E_INK};line-height:1.22;letter-spacing:-0.4px;">
+      <div style="font-family:{SERIF};font-size:{title_size}px;font-weight:700;color:{E_INK};line-height:1.25;letter-spacing:-0.3px;">
         <a href="{link}" style="color:{E_INK};text-decoration:none;">{_he(it.get('title',''))}</a>
       </div>
-      {_img(it)}
-      <div style="font-family:{SANS};font-size:15px;color:{E_BODY};line-height:1.66;margin:12px 0 0;">
+      <div style="font-family:{SANS};font-size:15px;color:{E_BODY};line-height:1.7;margin:12px 0 0;">
         {summary}
       </div>
-      {_role_line(it.get('roles', []))}
-      <a href="{link}" style="display:inline-block;font-family:{SANS};font-size:12px;font-weight:700;color:{E_ACCENT};text-transform:uppercase;letter-spacing:1px;text-decoration:none;margin-top:12px;">Read the full story &rarr;</a>
+      {_role_chips(it.get('roles', []), accent)}
+      <a href="{link}" style="display:inline-block;font-family:{SANS};font-size:12.5px;font-weight:700;color:{accent};text-decoration:none;margin-top:13px;">Keep reading &rarr;</a>
     </div>
-    <div style="border-top:1px solid {E_RULE};margin:0 0 22px;"></div>
+    """
+
+
+def _article_row(it: dict, num: int, accent: str) -> str:
+    """Compact row. Thumbnails alternate sides so the page breathes naturally."""
+    link = _url(it.get("link", "#"))
+    img = (it.get("image") or "").strip()
+    on_right = num % 2 == 0
+    thumb = ""
+    if img.lower().startswith(("http://", "https://")):
+        pad = "0 0 0 16px" if on_right else "0 16px 0 0"
+        radius = _LEAF_R if on_right else _LEAF
+        thumb = (f'<td width="128" style="vertical-align:top;padding:{pad};">'
+                 f'<a href="{link}"><img src="{_url(img)}" width="128" alt="" '
+                 f'style="width:128px;height:auto;display:block;border-radius:{radius};"></a></td>')
+    text = f"""
+        <td style="vertical-align:top;">
+          <div style="margin:0 0 5px;">
+            <span style="font-family:{SERIF};font-size:13px;font-weight:700;font-style:italic;color:{accent};">No.{num:02d}</span>
+            <span style="font-family:{SANS};font-size:9.5px;font-weight:700;color:{E_MUTED};letter-spacing:1.5px;text-transform:uppercase;">&nbsp;&nbsp;{_he(it.get('source',''))}</span>
+          </div>
+          <div style="font-family:{SERIF};font-size:17px;font-weight:700;color:{E_INK};line-height:1.3;">
+            <a href="{link}" style="color:{E_INK};text-decoration:none;">{_he(it.get('title',''))}</a>
+          </div>
+          <div style="font-family:{SANS};font-size:13px;color:{E_BODY};line-height:1.6;margin:6px 0 0;">
+            {_he(it.get('summary',''))}
+          </div>
+          <a href="{link}" style="display:inline-block;font-family:{SANS};font-size:12px;font-weight:700;color:{accent};text-decoration:none;margin-top:9px;">Keep reading &rarr;</a>
+        </td>"""
+    cells = f"{text}{thumb}" if on_right else f"{thumb}{text}"
+    return f"""
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>{cells}</tr>
+    </table>
     """
 
 
 def _section(category: str, items: list, first: bool = False) -> str:
-    name = _he(CAT_LABEL.get(category, _clean(category))).upper()
+    name = _he(CAT_LABEL.get(category, _clean(category)))
     tagline = _he(CAT_TAGLINES.get(category, ""))
     anchor = _slug(category)
-    stories = "".join(_article(it, i, lead=(first and i == 1)) for i, it in enumerate(items, 1))
+    accent = NEON.get(category, E_ACCENT)
+    parts = []
+    for i, it in enumerate(items, 1):
+        if i > 1:
+            parts.append(_dashed_rule())
+        parts.append(_article_hero(it, i, accent, lead=(first and i == 1)) if i == 1
+                     else _article_row(it, i, accent))
+    stories = "".join(parts)
     return f"""
     <a name="{anchor}" id="{anchor}"></a>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:30px 0 4px;"><tr>
-      <td style="vertical-align:middle;white-space:nowrap;padding-right:12px;"><span style="font-family:{SANS};font-size:12px;font-weight:700;color:{E_ACCENT};text-transform:uppercase;letter-spacing:2px;">{name}</span></td>
-      <td style="vertical-align:middle;width:100%;"><div style="border-top:1px solid {E_INK};font-size:0;line-height:0;">&nbsp;</div></td>
-      <td style="vertical-align:middle;white-space:nowrap;padding-left:12px;"><span style="font-family:{SANS};font-size:11px;color:{E_MUTED};">{len(items)} stories</span></td>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:38px 0 4px;"><tr>
+      <td style="vertical-align:middle;white-space:nowrap;padding-right:12px;">
+        <span style="font-family:{SANS};font-size:13px;font-weight:800;color:{accent};letter-spacing:2.5px;text-transform:uppercase;">&#10047;&nbsp; {name}</span></td>
+      <td style="vertical-align:middle;width:100%;"><div style="border-top:1px dashed {E_RULE};font-size:0;line-height:0;">&nbsp;</div></td>
+      <td style="vertical-align:middle;white-space:nowrap;padding-left:12px;">
+        <span style="font-family:{SERIF};font-size:12px;font-style:italic;color:{E_MUTED};">{len(items)} {'story' if len(items) == 1 else 'stories'}</span></td>
     </tr></table>
-    <div style="font-family:{SERIF};font-size:14px;font-style:italic;color:{E_MUTED};margin:0 0 20px;">{tagline}</div>
+    <div style="font-family:{SERIF};font-size:14px;font-style:italic;color:{E_MUTED};margin:2px 0 20px;">{tagline}</div>
     {stories}
     """
 
 
 def _index(digest: dict) -> str:
-    links = []
+    chips = []
     for cat, items in digest.items():
         name = _he(CAT_LABEL.get(cat, _clean(cat)))
-        anchor = _slug(cat)
-        links.append(
-            f'<a href="#{anchor}" style="text-decoration:none;font-family:{SANS};font-size:12.5px;'
-            f'font-weight:600;color:{E_INK};white-space:nowrap;">{name} '
-            f'<span style="color:{E_ACCENT};">{len(items)}</span></a>'
+        accent = NEON.get(cat, E_ACCENT)
+        chips.append(
+            f'<a href="#{_slug(cat)}" style="display:inline-block;text-decoration:none;'
+            f'font-family:{SANS};font-size:12px;font-weight:600;color:{E_INK};'
+            f'background:{E_PANEL};border:1px solid {E_RULE};border-radius:{_LEAF};'
+            f'padding:7px 14px;margin:0 5px 8px 0;white-space:nowrap;">{name} '
+            f'<span style="font-family:{SERIF};color:{accent};font-weight:700;">{len(items)}</span></a>'
         )
-    sep = f'<span style="color:{E_RULE};">&nbsp;&nbsp;&middot;&nbsp;&nbsp;</span>'
-    return (f'<div style="margin:16px 0 2px;line-height:2.1;text-align:center;">'
-            f'<span style="font-family:{SANS};font-size:10px;font-weight:700;color:{E_ACCENT};'
-            f'text-transform:uppercase;letter-spacing:2px;">In this issue&nbsp;&nbsp;</span>'
-            f'{sep.join(links)}</div>')
+    return (f'<div style="margin:20px 0 4px;text-align:center;line-height:1;">'
+            f'{"".join(chips)}</div>')
 
 
-def build_html(digest: dict) -> str:
+# Validated light-mode categorical hues (dataviz six-checks, white surface) —
+# used where several colors sit side by side (topic chips). Fixed order.
+CHIP_COLORS = ["#2E7DB3", "#C77F0A", "#14876B", "#D14B32",
+               "#7B5FC0", "#5C8A2E", "#C2417F", "#A0522D"]
+
+# Pebble tints + accents for the stat tiles — each one its own little stone.
+_PEBBLES = [("#EFF5E2", "#648741", "26px 10px 22px 12px"),
+            ("#E9F2EE", "#2E7DB3", "12px 24px 10px 22px"),
+            ("#FBF2E2", "#C77F0A", "22px 12px 26px 10px"),
+            ("#F2EFF8", "#7B5FC0", "10px 22px 12px 26px")]
+
+
+def _label(text: str) -> str:
+    return (f'<div style="font-family:{SERIF};font-size:15px;font-style:italic;font-weight:700;'
+            f'color:{E_ACCENT};margin:26px 0 12px;">{text}</div>')
+
+
+def _stat_tiles(pulse: dict, featured: int, read_min: int) -> str:
+    tiles = [
+        (str(pulse.get("scanned", featured)), "scanned this week"),
+        (str(featured),                        "picked for today"),
+        (str(pulse.get("sources", "—")),       "sources tended"),
+        (str(read_min),                        "minutes to read"),
+    ]
+    gap = '<td width="8" style="font-size:0;line-height:0;">&nbsp;</td>'
+    tds = gap.join(
+        f'<td width="25%" style="background:{bg};border-radius:{radius};'
+        f'padding:17px 4px 14px;text-align:center;">'
+        f'<div style="font-family:{SERIF};font-size:28px;font-weight:700;color:{fg};line-height:1;">{v}</div>'
+        f'<div style="font-family:{SANS};font-size:10px;color:{E_MUTED};margin-top:7px;">{l}</div></td>'
+        for (v, l), (bg, fg, radius) in zip(tiles, _PEBBLES))
+    return (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0">'
+            f'<tr>{tds}</tr></table>')
+
+
+def _model_chart(models: list) -> str:
+    """Most talked-about model families — single-hue moss bars, direct labels."""
+    if not models:
+        return ""
+    mx = max(n for _, n in models) or 1
+    rows = ""
+    for name, n in models:
+        pct = max(6, round(n / mx * 100))
+        rows += (
+            '<tr>'
+            f'<td width="118" style="font-family:{SANS};font-size:12.5px;font-weight:600;color:{E_INK};'
+            f'padding:6px 10px 6px 0;white-space:nowrap;">{_he(name)}</td>'
+            f'<td style="padding:6px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+            f'<td width="{pct}%" style="background:{E_ACCENT};height:12px;border-radius:6px 2px 6px 2px;font-size:0;line-height:0;">&nbsp;</td>'
+            f'<td width="{100 - pct}%" style="font-size:0;line-height:0;">&nbsp;</td>'
+            '</tr></table></td>'
+            f'<td width="30" style="font-family:{SERIF};font-size:13px;font-weight:700;color:{E_ACCENT};'
+            f'padding:6px 0 6px 10px;text-align:right;">{n}</td>'
+            '</tr>')
+    return (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+            f'style="background:{E_CARD};border-radius:22px 6px 22px 6px;">'
+            f'<tr><td style="padding:18px 20px;">'
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0">{rows}</table>'
+            f'<div style="font-family:{SERIF};font-size:11px;font-style:italic;color:{E_MUTED};margin-top:10px;">'
+            f'articles mentioning each family across everything we read this week</div>'
+            f'</td></tr></table>')
+
+
+def _radar_chips(topics: list) -> str:
+    if not topics:
+        return ""
+    chips = ""
+    for i, (name, n) in enumerate(topics):
+        c = CHIP_COLORS[i % len(CHIP_COLORS)]
+        radius = _LEAF if i % 2 == 0 else _LEAF_R
+        chips += (f'<span style="display:inline-block;font-family:{SANS};font-size:12px;font-weight:600;'
+                  f'color:{E_INK};background:{E_CARD};border:1px solid {E_RULE};'
+                  f'border-radius:{radius};padding:7px 13px;margin:0 7px 8px 0;">'
+                  f'<span style="color:{c};">&#10047;</span>&nbsp; {_he(name)}&nbsp; '
+                  f'<span style="font-family:{SERIF};font-weight:700;color:{c};">{n}</span></span>')
+    return f'<div>{chips}</div>'
+
+
+def _pulse_board(pulse: dict, featured: int, read_min: int) -> str:
+    """The 'Morning Pulse' dashboard: tiles, model chart, trending topics."""
+    if not pulse:
+        return ""
+    return (
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        f'style="background:{E_PANEL};border-radius:26px 8px 26px 8px;"><tr><td style="padding:6px 20px 20px;">'
+        + _label("The morning pulse")
+        + _stat_tiles(pulse, featured, read_min)
+        + _label("Most talked-about models")
+        + _model_chart(pulse.get("models", []))
+        + _label("Growing this week")
+        + _radar_chips(pulse.get("topics", []))
+        + '</td></tr></table>'
+    )
+
+
+def build_html(digest: dict, pulse: dict | None = None) -> str:
     today = date.today().strftime("%A, %B %d, %Y").upper()
     total = sum(len(v) for v in digest.values())
     read_min = max(2, round(total * 0.4))
 
     nav = _index(digest) if digest else ""
+    board = _pulse_board(pulse or {}, total, read_min)
     sections = "".join(_section(cat, items, first=(i == 0))
                        for i, (cat, items) in enumerate(digest.items()))
     if not sections:
@@ -224,28 +393,29 @@ def build_html(digest: dict) -> str:
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:{E_PAPER};">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:{E_PAPER};">
-<tr><td align="center" style="padding:0 0 40px;">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:{E_CARD};">
+<tr><td align="center" style="padding:30px 10px 52px;">
+<table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:{E_CARD};border-radius:30px 30px 30px 8px;">
 
-  <tr><td style="padding:34px 36px 0;">
-    <div style="font-family:{SANS};font-size:10px;font-weight:700;color:{E_ACCENT};letter-spacing:3px;text-transform:uppercase;text-align:center;">Artificial Intelligence &middot; Daily Edition</div>
-    <div style="font-family:{SERIF};font-size:48px;font-weight:700;color:{E_INK};letter-spacing:-1.2px;line-height:1;margin:10px 0 12px;text-align:center;">The AI Dispatch</div>
-    <div style="border-bottom:3px solid {E_INK};font-size:0;line-height:0;">&nbsp;</div>
-    <div style="border-bottom:1px solid {E_INK};margin-top:3px;font-size:0;line-height:0;">&nbsp;</div>
-    <div style="font-family:{SANS};font-size:10.5px;color:{E_MUTED};letter-spacing:1.5px;text-transform:uppercase;text-align:center;margin-top:10px;">{_he(today)} &nbsp;&middot;&nbsp; {total} stories &nbsp;&middot;&nbsp; {read_min} min read</div>
+  <tr><td style="background:{E_ACCENT2};background:linear-gradient(135deg,{E_ACCENT2},{E_ACCENT});height:7px;font-size:0;line-height:0;border-radius:30px 30px 0 0;">&nbsp;</td></tr>
+
+  <tr><td style="padding:40px 26px 0;">
+    <div style="font-family:{SANS};font-size:11px;font-weight:700;color:{E_ACCENT};letter-spacing:3.5px;text-transform:uppercase;text-align:center;">&#10047; Artificial Intelligence &middot; Grown Daily &#10047;</div>
+    <div style="font-family:{SERIF};font-size:46px;font-weight:700;color:{E_INK};letter-spacing:-0.8px;line-height:1.05;margin:14px 0 8px;text-align:center;">The AI Dispatch</div>
+    <div style="font-family:{SERIF};font-size:13.5px;font-style:italic;color:{E_MUTED};text-align:center;">{_he(today.title())} &nbsp;&middot;&nbsp; {total} stories &nbsp;&middot;&nbsp; about {read_min} minutes, tea included</div>
     {nav}
-    <div style="text-align:center;margin-top:2px;"><a href="{WEB_URL}" style="display:inline-block;background:{E_ACCENT};color:#FFFFFF;font-family:{SANS};font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;text-decoration:none;padding:11px 24px;border-radius:7px;">Open the full edition &rarr;</a></div>
+    <div style="text-align:center;margin-top:14px;"><a href="{WEB_URL}" style="display:inline-block;background:{E_ACCENT};color:#FFFFFF;font-family:{SANS};font-size:12px;font-weight:700;letter-spacing:1px;text-decoration:none;padding:12px 28px;border-radius:{_LEAF};">Read the full edition &rarr;</a></div>
   </td></tr>
 
-  <tr><td style="padding:8px 36px;">
+  <tr><td style="padding:14px 26px;">
+    {board}
+    <div style="height:8px;font-size:0;line-height:0;">&nbsp;</div>
     {sections}
   </td></tr>
 
-  <tr><td style="padding:10px 36px 34px;">
-    <div style="border-top:3px solid {E_INK};font-size:0;line-height:0;">&nbsp;</div>
-    <div style="border-top:1px solid {E_INK};margin-top:3px;margin-bottom:13px;font-size:0;line-height:0;">&nbsp;</div>
-    <div style="font-family:{SERIF};font-size:17px;font-weight:700;color:{E_INK};">The AI Dispatch</div>
-    <div style="font-family:{SANS};font-size:11px;color:{E_MUTED};margin-top:5px;line-height:1.6;">Delivered daily at 9:00 AM IST &nbsp;&middot;&nbsp; Aggregated from 30+ AI news &amp; research sources &nbsp;&middot;&nbsp; PDF edition attached</div>
+  <tr><td style="padding:16px 26px 36px;">
+    <div style="background:{E_ACCENT2};background:{E_GRAD};height:3px;border-radius:3px;font-size:0;line-height:0;margin-bottom:16px;">&nbsp;</div>
+    <div style="font-family:{SERIF};font-size:18px;font-weight:700;color:{E_INK};">The AI Dispatch</div>
+    <div style="font-family:{SERIF};font-size:12px;font-style:italic;color:{E_MUTED};margin-top:6px;line-height:1.7;">Grown fresh every morning at 9:00 IST from 30+ AI news &amp; research sources &middot; PDF edition attached &#127807;</div>
   </td></tr>
 
 </table>
@@ -443,220 +613,465 @@ def _role_flags(roles):
     return [(name, any(k in joined for k in kws)) for name, kws in _PDF_ROLES]
 
 
-def build_pdf(digest: dict) -> bytes:
+def _pdf_image(url: str, width: float, ratio: float = 16 / 9, radius: int = 14,
+               min_px: int = 480):
+    """Download a story image, centre-crop it to a uniform aspect ratio, round
+    its corners, and return a reportlab Image of exactly (width, width/ratio).
+
+    Cropping every image to the same ratio is what keeps the layout aligned —
+    no more ragged heights. A missing/broken image returns None (no filler box);
+    network/format failures degrade quietly.
+    """
+    import requests
+    from reportlab.platypus import Image
+    from PIL import Image as PILImage, ImageDraw
+
+    if not (url or "").lower().startswith(("http://", "https://")):
+        return None
+    try:
+        r = requests.get(url, timeout=8,
+                         headers={"User-Agent": "Mozilla/5.0 (AI-News-Digest)"})
+        r.raise_for_status()
+        if "image" not in r.headers.get("Content-Type", "").lower():
+            return None
+        if len(r.content) > 8_000_000:          # skip absurdly large assets
+            return None
+        # Pillow decodes AVIF/WebP/PNG/JPEG; reportlab then embeds the PNG.
+        pil = PILImage.open(io.BytesIO(r.content)).convert("RGB")
+        iw, ih = pil.size
+        if not iw or not ih:
+            return None
+        if iw < min_px or ih < min_px * 0.45:   # low-res badge/logo — upscales terribly
+            return None
+        if iw / ih > 3 or ih / iw > 3:          # banner ads / skyscrapers, not photos
+            return None
+
+        # Centre-crop to the target aspect ratio.
+        target = ratio
+        if iw / ih > target:                     # too wide → trim sides
+            new_w = int(ih * target)
+            x0 = (iw - new_w) // 2
+            pil = pil.crop((x0, 0, x0 + new_w, ih))
+        else:                                    # too tall → trim top/bottom
+            new_h = int(iw / target)
+            y0 = (ih - new_h) // 2
+            pil = pil.crop((0, y0, iw, y0 + new_h))
+
+        # Downscale (cap ~1400px wide) and round the corners via an alpha mask.
+        if pil.width > 1400:
+            pil = pil.resize((1400, int(1400 / target)), PILImage.LANCZOS)
+        rad_px = int(radius * pil.width / max(width, 1))
+        mask = PILImage.new("L", pil.size, 0)
+        ImageDraw.Draw(mask).rounded_rectangle(
+            (0, 0, pil.width - 1, pil.height - 1), radius=rad_px, fill=255)
+        rgba = pil.convert("RGBA")
+        rgba.putalpha(mask)
+
+        out = io.BytesIO()
+        rgba.save(out, format="PNG")
+        out.seek(0)
+        img = Image(out, width=width, height=width / target)
+        img.hAlign = "LEFT"
+        return img
+    except Exception:
+        return None
+
+
+def build_pdf(digest: dict, pulse: dict | None = None) -> bytes:
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import cm
     from reportlab.lib import colors
     from reportlab.platypus import (
         SimpleDocTemplate, Paragraph, Spacer, HRFlowable,
-        Table, TableStyle, KeepTogether, PageBreak,
+        Table, TableStyle, KeepTogether, PageBreak, Flowable,
     )
     from reportlab.lib.enums import TA_CENTER
+    from reportlab.pdfbase.pdfmetrics import stringWidth
 
-    ACCENT_HEX = {
-        "🤖 Model Updates":           "#6366f1",
-        "🚀 New Launch / Feature":    "#3b82f6",
-        "🔬 R&D / Research":          "#0ea5e9",
-        "✅ Good News / Wins":         "#16a34a",
-        "⚠️ Bad News / Risk":          "#dc2626",
-        "💡 AI Awareness / Must Know": "#f59e0b",
-        "📰 General AI Update":        "#8b5cf6",
-    }
-    CLEAN_NAME = {
-        "🤖 Model Updates":           "MODEL UPDATES",
-        "🚀 New Launch / Feature":    "NEW LAUNCHES & FEATURES",
-        "🔬 R&D / Research":          "R&D / RESEARCH",
-        "✅ Good News / Wins":         "GOOD NEWS & WINS",
-        "⚠️ Bad News / Risk":          "RISKS & CONCERNS",
-        "💡 AI Awareness / Must Know": "MUST-KNOW / AWARENESS",
-        "📰 General AI Update":        "GENERAL AI UPDATES",
-    }
+    pulse = pulse or {}
 
-    DARK   = colors.HexColor("#0f172a")
-    BODY   = colors.HexColor("#334155")
-    MUTED  = colors.HexColor("#94a3b8")
-    LINE   = colors.HexColor("#e2e8f0")
-    WHITE  = colors.white
-    INDIGO = colors.HexColor("#6366f1")
+    # ── "Morning Canopy" palette — mirrors the email (E_* vars) ──
+    VOID    = colors.HexColor("#FBFCF6")  # page paper
+    PANEL   = colors.HexColor(E_PANEL)    # tile surfaces
+    TRACK   = colors.HexColor("#E7EEDB")  # chart tracks
+    INK     = colors.HexColor(E_INK)      # deep forest ink
+    BODY    = colors.HexColor(E_BODY)     # body copy
+    MUTED   = colors.HexColor(E_MUTED)    # labels / captions
+    RULE    = colors.HexColor(E_RULE)     # hairline rules
+    ACCENT  = colors.HexColor(E_ACCENT)   # moss
+    ACCENT2 = colors.HexColor(E_ACCENT2)  # spring leaf
+
+    # Base-14 fonts: Times = warm serif display, Helvetica = clear body.
+    SANS_R, SANS_B = "Helvetica", "Helvetica-Bold"
+    SER_R, SER_B, SER_I, SER_BI = ("Times-Roman", "Times-Bold",
+                                   "Times-Italic", "Times-BoldItalic")
 
     S = getSampleStyleSheet()
 
     def mk(name, **kw):
         return ParagraphStyle(name, parent=S["Normal"], **kw)
 
-    st_kicker = mk("kick", fontSize=11, textColor=INDIGO, alignment=TA_CENTER,
-                   fontName="Helvetica-Bold", spaceAfter=8, leading=14)
-    st_title  = mk("ttl", fontSize=42, textColor=DARK, alignment=TA_CENTER,
-                   fontName="Helvetica-Bold", leading=46)
-    st_cdate  = mk("cdt", fontSize=13, textColor=BODY, alignment=TA_CENTER)
-    st_h2     = mk("h2", fontSize=15, textColor=DARK, fontName="Helvetica-Bold", spaceAfter=12)
-    st_cat    = mk("cat", fontSize=15, textColor=WHITE, fontName="Helvetica-Bold", leading=18)
-    st_ctag   = mk("ctag", fontSize=9.5, textColor=WHITE, leading=12)
-    st_ttl2   = mk("t2", fontSize=12.5, textColor=DARK, fontName="Helvetica-Bold",
-                   leading=16, spaceAfter=4)
-    st_sum    = mk("sum", fontSize=10, textColor=BODY, leading=15, spaceAfter=7)
-    st_meta   = mk("meta", fontSize=9, textColor=MUTED)
-    st_ron    = mk("ron", fontSize=8.5, textColor=colors.HexColor("#166534"), leading=11)
-    st_roff   = mk("roff", fontSize=8.5, textColor=colors.HexColor("#cbd5e1"), leading=11)
-    st_toc    = mk("toc", fontSize=11, textColor=BODY, leading=17)
-    st_top    = mk("top", fontSize=10.5, textColor=DARK, fontName="Helvetica-Bold",
-                   leading=14, spaceAfter=7)
-    st_snum   = mk("snum", fontSize=22, textColor=DARK, fontName="Helvetica-Bold", alignment=TA_CENTER)
-    st_slbl   = mk("slbl", fontSize=8, textColor=MUTED, alignment=TA_CENTER)
-    st_foot   = mk("foot", fontSize=8.5, textColor=MUTED, alignment=TA_CENTER, leading=12)
+    st_kicker  = mk("kick", fontSize=9.5, textColor=ACCENT, alignment=TA_CENTER,
+                    fontName=SANS_B, spaceAfter=12, leading=13)
+    st_mast    = mk("mast", fontSize=40, textColor=INK, alignment=TA_CENTER,
+                    fontName=SER_B, leading=44)
+    st_subline = mk("sub", fontSize=10.5, textColor=MUTED, alignment=TA_CENTER,
+                    fontName=SER_I, leading=15)
+    st_label   = mk("lbl", fontSize=13, textColor=ACCENT, fontName=SER_BI,
+                    leading=16, spaceBefore=16, spaceAfter=8)
+    st_idx     = mk("idx", fontSize=10, textColor=BODY, alignment=TA_CENTER, leading=17)
+    st_seckick = mk("seck", fontSize=12.5, fontName=SANS_B, leading=15)   # colour set per category
+    st_seccnt  = mk("secc", fontSize=9.5, textColor=MUTED, fontName=SER_I,
+                    alignment=2, leading=15)  # right-aligned
+    st_tagline = mk("tag", fontSize=10.5, textColor=MUTED, fontName=SER_I, leading=14)
+    st_src     = mk("src", fontSize=9.5, textColor=MUTED, fontName=SANS_R, leading=15)
+    st_title   = mk("ttl2", fontSize=18, textColor=INK, fontName=SER_B, leading=22, spaceAfter=2)
+    st_rtitle  = mk("rttl", fontSize=12.5, textColor=INK, fontName=SER_B, leading=16, spaceAfter=2)
+    st_sum     = mk("sum", fontSize=10.5, textColor=BODY, leading=16.5, spaceBefore=7, spaceAfter=2)
+    st_rsum    = mk("rsum", fontSize=9, textColor=BODY, leading=14, spaceBefore=4, spaceAfter=2)
+    st_roles   = mk("roles", fontSize=9, textColor=MUTED, fontName=SER_I, leading=13, spaceBefore=9)
+    st_more    = mk("more", fontSize=9.5, textColor=ACCENT, fontName=SANS_B, leading=13, spaceBefore=8)
+    st_rmore   = mk("rmore", fontSize=8.5, textColor=ACCENT, fontName=SANS_B, leading=11, spaceBefore=5)
+    st_foot    = mk("foot", fontSize=9, textColor=MUTED, alignment=TA_CENTER,
+                    fontName=SER_I, leading=14)
+    st_foot_b  = mk("footb", fontSize=15, textColor=INK, alignment=TA_CENTER,
+                    fontName=SER_B, leading=18)
 
-    def role_checklist(roles):
-        flags = _role_flags(roles)
-        cells = []
-        for name, on in flags:
-            if on:
-                cells.append(Paragraph(
-                    f'<font name="ZapfDingbats" color="#16a34a">4</font> <b>{_safe(name)}</b>',
-                    st_ron))
-            else:
-                cells.append(Paragraph(_safe(name), st_roff))
-        t = Table([cells[0:3], cells[3:6]],
-                  colWidths=[5.9 * cm, 5.9 * cm, 5.9 * cm], hAlign="LEFT")
-        style = [
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING", (0, 0), (-1, -1), 5),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ("LEFTPADDING", (0, 0), (-1, -1), 9),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 9),
-            ("LINEBELOW", (0, 0), (-1, 0), 4, WHITE),   # gap between the two rows
-            ("LINEAFTER", (0, 0), (-2, -1), 4, WHITE),  # gap between columns
-        ]
-        k = 0
-        for r in range(2):
-            for c in range(3):
-                on = flags[k][1]
-                style.append(("BACKGROUND", (c, r), (c, r),
-                              colors.HexColor("#dcfce7") if on else colors.HexColor("#f1f5f9")))
-                k += 1
-        t.setStyle(TableStyle(style))
-        return t
+    CONTENT_W = 18.0 * cm  # A4 (21cm) minus 1.5cm margins each side
+
+    # ── Custom dashboard flowables ─────────────────────────────────
+
+    class _Tiles(Flowable):
+        """Row of pebble-shaped stat tiles: serif number + soft caption.
+        Radii and baselines vary a little so the row reads organic, not gridded."""
+        PEBBLES = [("#EFF5E2", "#648741", 14, 0),
+                   ("#E9F2EE", "#2E7DB3", 20, 3),
+                   ("#FBF2E2", "#C77F0A", 12, 0),
+                   ("#F2EFF8", "#7B5FC0", 18, 3)]
+
+        def __init__(self, tiles, width, height=2.0 * cm, gap=0.28 * cm):
+            super().__init__()
+            self.tiles, self.width, self.height, self.gap = tiles, width, height, gap
+
+        def draw(self):
+            c = self.canv
+            n = len(self.tiles)
+            tw = (self.width - self.gap * (n - 1)) / n
+            for i, (value, caption) in enumerate(self.tiles):
+                bg, fg, rad, lift = self.PEBBLES[i % len(self.PEBBLES)]
+                x = i * (tw + self.gap)
+                c.setFillColor(colors.HexColor(bg))
+                c.roundRect(x, lift, tw, self.height - 3, rad, stroke=0, fill=1)
+                c.setFillColor(colors.HexColor(fg))
+                c.setFont(SER_B, 21)
+                c.drawCentredString(x + tw / 2, lift + self.height - 0.95 * cm, str(value))
+                c.setFillColor(MUTED)
+                c.setFont(SANS_R, 7)
+                c.drawCentredString(x + tw / 2, lift + 0.34 * cm, caption)
+
+    class _NeonBars(Flowable):
+        """Horizontal bar chart: label | rounded track+bar | value. Moss, one hue."""
+        ROW_H = 0.62 * cm
+
+        def __init__(self, data, width, label_w=3.4 * cm, val_w=0.9 * cm):
+            super().__init__()
+            self.data, self.width = data, width
+            self.label_w, self.val_w = label_w, val_w
+            self.height = self.ROW_H * len(data)
+
+        def draw(self):
+            c = self.canv
+            mx = max((n for _, n in self.data), default=1)
+            track_w = self.width - self.label_w - self.val_w - 0.4 * cm
+            bh = 6.5
+            for i, (name, n) in enumerate(self.data):
+                yc = self.height - (i + 0.5) * self.ROW_H
+                c.setFillColor(INK)
+                c.setFont(SANS_R, 8.5)
+                c.drawString(0, yc - 3, name)
+                bx = self.label_w
+                c.setFillColor(TRACK)
+                c.roundRect(bx, yc - bh / 2, track_w, bh, bh / 2, stroke=0, fill=1)
+                c.setFillColor(ACCENT)
+                c.roundRect(bx, yc - bh / 2, max(track_w * n / mx, bh), bh,
+                            bh / 2, stroke=0, fill=1)
+                c.setFillColor(ACCENT)
+                c.setFont(SER_B, 10)
+                c.drawRightString(self.width, yc - 3.5, str(n))
+
+    class _Chips(Flowable):
+        """Wrapping row of leaf-shaped chips: berry dot + topic + count."""
+        CHIP_H, PAD_X, GAP = 0.64 * cm, 0.26 * cm, 0.2 * cm
+        COLORS = CHIP_COLORS  # validated light-mode categorical set
+
+        def __init__(self, topics, width):
+            super().__init__()
+            self.topics, self.width = topics, width
+            self._layout = []
+            x = y = 0
+            for i, (name, n) in enumerate(topics):
+                w = (stringWidth(name, "Helvetica", 8.5)
+                     + stringWidth(f" {n}", "Times-Bold", 10)
+                     + 2 * self.PAD_X + 12)
+                if x + w > width and x > 0:
+                    x, y = 0, y + self.CHIP_H + self.GAP
+                self._layout.append((x, y, w, name, n, self.COLORS[i % len(self.COLORS)]))
+                x += w + self.GAP
+            self.height = y + self.CHIP_H
+
+        def _leaf_rect(self, c, x, y, w, h, r, flip):
+            """Rect with two opposite corners rounded — a leaf silhouette."""
+            p = c.beginPath()
+            k = r * 0.45
+            if not flip:            # rounded bottom-right + top-left
+                p.moveTo(x, y)
+                p.lineTo(x + w - r, y)
+                p.curveTo(x + w - k, y, x + w, y + k, x + w, y + r)
+                p.lineTo(x + w, y + h)
+                p.lineTo(x + r, y + h)
+                p.curveTo(x + k, y + h, x, y + h - k, x, y + h - r)
+                p.close()
+            else:                   # rounded bottom-left + top-right
+                p.moveTo(x + w, y)
+                p.lineTo(x + r, y)
+                p.curveTo(x + k, y, x, y + k, x, y + r)
+                p.lineTo(x, y + h)
+                p.lineTo(x + w - r, y + h)
+                p.curveTo(x + w - k, y + h, x + w, y + h - k, x + w, y + h - r)
+                p.close()
+            c.drawPath(p, stroke=1, fill=1)
+
+        def draw(self):
+            c = self.canv
+            for i, (x, y, w, name, n, col) in enumerate(self._layout):
+                yy = self.height - y - self.CHIP_H          # flip: first row on top
+                c.setFillColor(colors.white)
+                c.setStrokeColor(RULE)
+                self._leaf_rect(c, x, yy, w, self.CHIP_H, 7, flip=(i % 2 == 1))
+                c.setFillColor(colors.HexColor(col))
+                c.circle(x + self.PAD_X + 1.5, yy + self.CHIP_H / 2, 2.2, stroke=0, fill=1)
+                tx = x + self.PAD_X + 7
+                c.setFont("Helvetica", 8.5)
+                c.setFillColor(INK)
+                c.drawString(tx, yy + 0.21 * cm, name)
+                c.setFont("Times-Bold", 10)
+                c.setFillColor(colors.HexColor(col))
+                c.drawString(tx + stringWidth(name, "Helvetica", 8.5) + 5,
+                             yy + 0.2 * cm, str(n))
+
+    def roles_line(roles, accent_hex):
+        names = [_safe(name) for name, on in _role_flags(roles) if on]
+        if not names:
+            return None
+        joined = f' <font color="{E_MUTED}">&middot;</font> '.join(
+            f'<font color="{accent_hex}">{n}</font>' for n in names)
+        return Paragraph(f"Relevant for &mdash; {joined}", st_roles)
+
+    def _draw_leaf(c, x, y, size, angle, color, alpha):
+        """A single pointed-oval leaf, drawn with two beziers."""
+        c.saveState()
+        c.translate(x, y)
+        c.rotate(angle)
+        c.setFillColor(color)
+        try:
+            c.setFillAlpha(alpha)
+        except Exception:
+            pass
+        p = c.beginPath()
+        p.moveTo(0, 0)
+        p.curveTo(size * 0.35, size * 0.38, size * 0.75, size * 0.38, size, 0)
+        p.curveTo(size * 0.75, -size * 0.38, size * 0.35, -size * 0.38, 0, 0)
+        c.drawPath(p, stroke=0, fill=1)
+        c.restoreState()
+
+    # Soft paper page with a hand-drawn branch in the top-right corner and a
+    # few seeds bottom-left — quiet nature, no grids, no strips.
+    def paint_page(canvas, doc):
+        W, H = A4
+        canvas.saveState()
+        canvas.setFillColor(VOID)
+        canvas.rect(0, 0, W, H, fill=1, stroke=0)
+
+        # branch stem arcing out of the top-right corner
+        canvas.setStrokeColor(ACCENT)
+        try:
+            canvas.setStrokeAlpha(0.30)
+        except Exception:
+            pass
+        canvas.setLineWidth(1.0)
+        p = canvas.beginPath()
+        p.moveTo(W - 3, H - 64)
+        p.curveTo(W - 30, H - 52, W - 52, H - 32, W - 78, H - 10)
+        canvas.drawPath(p, stroke=1, fill=0)
+
+        leaves = [(W - 16, H - 58, 12, 205, ACCENT2, 0.55),
+                  (W - 35, H - 45, 14, 220, ACCENT, 0.28),
+                  (W - 50, H - 34, 11, 200, ACCENT2, 0.50),
+                  (W - 66, H - 20, 13, 235, ACCENT, 0.25),
+                  (W - 76, H - 12, 10, 210, ACCENT2, 0.45)]
+        for lx, ly, sz, ang, col, al in leaves:
+            _draw_leaf(canvas, lx, ly, sz, ang, col, al)
+
+        # three seeds resting bottom-left
+        try:
+            canvas.setFillAlpha(0.30)
+        except Exception:
+            pass
+        canvas.setFillColor(ACCENT)
+        for sx, sy, r in ((26, 30, 2.4), (37, 24, 1.7), (31, 40, 1.3)):
+            canvas.circle(sx, sy, r, stroke=0, fill=1)
+        canvas.restoreState()
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
         leftMargin=1.5 * cm, rightMargin=1.5 * cm,
-        topMargin=1.4 * cm, bottomMargin=1.4 * cm,
-        title=f"AI Briefing {date.today().strftime('%B %d %Y')}",
+        topMargin=1.6 * cm, bottomMargin=1.6 * cm,
+        title=f"The AI Dispatch — {date.today().strftime('%B %d %Y')}",
     )
 
     story = []
     total = sum(len(v) for v in digest.values())
-    ncat = len(digest)
-
-    # ── Cover ──────────────────────────────────────────────────────
-    story.append(Spacer(1, 3.4 * cm))
-    story.append(Paragraph("ARTIFICIAL INTELLIGENCE", st_kicker))
-    story.append(Paragraph("Daily AI Briefing", st_title))
-    story.append(Spacer(1, 0.25 * cm))
-    story.append(Paragraph(date.today().strftime("%A, %B %d, %Y"), st_cdate))
-    story.append(Spacer(1, 1.1 * cm))
-
     read_min = max(2, round(total * 0.4))
-    stat_tbl = Table(
-        [[Paragraph(str(total), st_snum), Paragraph(str(ncat), st_snum), Paragraph(str(read_min), st_snum)],
-         [Paragraph("STORIES", st_slbl), Paragraph("CATEGORIES", st_slbl), Paragraph("MIN READ", st_slbl)]],
-        colWidths=[4.7 * cm, 4.7 * cm, 4.7 * cm], hAlign="CENTER")
-    stat_tbl.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8fafc")),
-        ("BOX", (0, 0), (-1, -1), 0.5, LINE),
-        ("LINEAFTER", (0, 0), (-2, -1), 0.5, LINE),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, 0), 12),
-        ("BOTTOMPADDING", (0, 0), (-1, 0), 2),
-        ("TOPPADDING", (0, 1), (-1, 1), 0),
-        ("BOTTOMPADDING", (0, 1), (-1, 1), 12),
-    ]))
-    story.append(stat_tbl)
-    story.append(Spacer(1, 1.1 * cm))
-    story.append(HRFlowable(width="35%", thickness=3, color=INDIGO, hAlign="CENTER"))
-    story.append(PageBreak())
+    today = date.today().strftime("%A, %B %d, %Y").upper()
 
-    # ── Contents + top stories ─────────────────────────────────────
-    story.append(Paragraph("In this briefing", st_h2))
-    for cat, items in digest.items():
-        hexc = ACCENT_HEX.get(cat, "#6366f1")
-        name = CLEAN_NAME.get(cat, _clean(cat).upper())
-        story.append(Paragraph(
-            f'<font color="{hexc}"><b>•</b></font>&nbsp;&nbsp;'
-            f'<b>{_safe(name)}</b>&nbsp;&nbsp;'
-            f'<font color="#94a3b8">{len(items)} stories</font>',
-            st_toc))
-    story.append(Spacer(1, 0.6 * cm))
-    story.append(HRFlowable(width="100%", thickness=1, color=LINE))
+    # ── Page 1: masthead + Morning Pulse dashboard ─────────────────
+    story.append(Spacer(1, 0.35 * cm))
+    story.append(Paragraph("&#9679; &nbsp;ARTIFICIAL INTELLIGENCE &middot; GROWN DAILY&nbsp; &#9679;",
+                           st_kicker))
+    story.append(Paragraph("The AI Dispatch", st_mast))
+    story.append(Spacer(1, 0.22 * cm))
+    story.append(HRFlowable(width="34%", thickness=2.2, color=ACCENT2, spaceAfter=2.5,
+                            hAlign="CENTER"))
+    story.append(HRFlowable(width="20%", thickness=1.0, color=ACCENT, spaceAfter=9,
+                            hAlign="CENTER"))
+    story.append(Paragraph(
+        f"{_safe(today.title())} &nbsp;&middot;&nbsp; {total} stories "
+        f"&nbsp;&middot;&nbsp; about {read_min} minutes, tea included",
+        st_subline))
     story.append(Spacer(1, 0.5 * cm))
 
-    all_items = [it for items in digest.values() for it in items]
-    if all_items:
-        story.append(Paragraph("Top stories today", st_h2))
-        for i, it in enumerate(all_items[:3], 1):
-            story.append(Paragraph(
-                f'<font color="#6366f1"><b>{i:02d}</b></font>&nbsp;&nbsp;{_safe(it.get("title", ""))}',
-                st_top))
-    story.append(PageBreak())
+    if pulse:
+        story.append(Paragraph("The morning pulse", st_label))
+        story.append(_Tiles([
+            (pulse.get("scanned", total), "scanned this week"),
+            (total,                        "picked for today"),
+            (pulse.get("sources", "—"),    "sources tended"),
+            (read_min,                     "minutes to read"),
+        ], CONTENT_W))
+        story.append(Spacer(1, 0.1 * cm))
+        if pulse.get("models"):
+            story.append(Paragraph("Most talked-about models", st_label))
+            story.append(_NeonBars(pulse["models"], CONTENT_W))
+        if pulse.get("topics"):
+            story.append(Paragraph("Growing this week", st_label))
+            story.append(_Chips(pulse["topics"], CONTENT_W))
 
-    # ── Sections ───────────────────────────────────────────────────
-    for ci, (category, items) in enumerate(digest.items()):
-        hexc = ACCENT_HEX.get(category, "#6366f1")
-        accent = colors.HexColor(hexc)
-        name = CLEAN_NAME.get(category, _clean(category).upper())
+    if digest:
+        story.append(Paragraph("In this issue", st_label))
+        idx = " &nbsp;&middot;&nbsp; ".join(
+            f'{_safe(_clean(CAT_LABEL.get(cat, _clean(cat))))} '
+            f'<font color="{NEON.get(cat, E_ACCENT)}"><b>{len(items)}</b></font>'
+            for cat, items in digest.items())
+        story.append(Paragraph(idx, st_idx))
+    story.append(Spacer(1, 0.55 * cm))
+
+    # ── Sections: hero story + compact aligned rows ────────────────
+    THUMB_W = 4.2 * cm
+    for category, items in digest.items():
+        accent_hex = NEON.get(category, E_ACCENT)
+        name = _clean(CAT_LABEL.get(category, _clean(category))).upper()
         tagline = _clean(CAT_TAGLINES.get(category, ""))
 
-        header = Table(
-            [[Paragraph(_safe(name), st_cat)],
-             [Paragraph(_safe(tagline), st_ctag)]],
-            colWidths=[18.0 * cm])
-        header.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), accent),
-            ("TOPPADDING", (0, 0), (-1, 0), 12),
-            ("BOTTOMPADDING", (0, 0), (-1, 0), 2),
-            ("TOPPADDING", (0, 1), (-1, 1), 0),
-            ("BOTTOMPADDING", (0, 1), (-1, 1), 12),
-            ("LEFTPADDING", (0, 0), (-1, -1), 16),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 16),
+        head = Table(
+            [[Paragraph(f'<font color="{accent_hex}">&#9679;&nbsp; {_safe(name)}</font>', st_seckick),
+              Paragraph(f"{len(items)} {'story' if len(items) == 1 else 'stories'}", st_seccnt)]],
+            colWidths=[CONTENT_W * 0.72, CONTENT_W * 0.28])
+        head.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ]))
-        story.append(header)
-        story.append(Spacer(1, 0.4 * cm))
+        # The section intro travels with the first story so a header is never
+        # stranded alone at the bottom of a page.
+        sec_intro = [head,
+                     HRFlowable(width="100%", thickness=0.9, color=RULE, spaceAfter=6)]
+        if tagline:
+            sec_intro.append(Paragraph(_safe(tagline), st_tagline))
+        sec_intro.append(Spacer(1, 0.35 * cm))
 
         for i, it in enumerate(items, 1):
-            block = [
-                Paragraph(
-                    f'<font color="{hexc}"><b>{i:02d}</b></font>&nbsp;&nbsp;{_safe(it.get("title", ""))}',
-                    st_ttl2),
-                Paragraph(_safe(it.get("summary", "")), st_sum),
-                role_checklist(it.get("roles", [])),
-                Spacer(1, 0.18 * cm),
-                Paragraph(
-                    f'<b>Source:</b> {_safe(it.get("source", ""))}'
-                    f'&nbsp;&nbsp;&nbsp;'
-                    f'<link href="{_safe_url(it.get("link", "#"))}" color="#2563eb">'
-                    f'<b>Read full article »</b></link>',
-                    st_meta),
-            ]
-            story.append(KeepTogether(block))
-            if i < len(items):
-                story.append(HRFlowable(width="100%", thickness=0.75, color=LINE,
-                                        spaceBefore=0.35 * cm, spaceAfter=0.35 * cm))
+            meta = Paragraph(
+                f'<font color="{accent_hex}" name="{SER_BI}" size="11">No.{i:02d}</font>'
+                f'&nbsp;&nbsp;&nbsp;{_safe(it.get("source", "")).upper()}', st_src)
+            link_p_style, title_style, sum_style = st_more, st_title, st_sum
 
-        story.append(Spacer(1, 0.5 * cm))
-        if ci < ncat - 1:
-            story.append(PageBreak())
+            if i == 1:
+                # Hero: full-width 16:9 image, big headline.
+                block = []
+                img = _pdf_image(it.get("image", ""), CONTENT_W, ratio=16 / 9)
+                if img is not None:
+                    block.append(img)
+                    block.append(Spacer(1, 0.3 * cm))
+                block += [meta, Paragraph(_safe(it.get("title", "")), title_style),
+                          Paragraph(_safe(it.get("summary", "")), sum_style)]
+                rl = roles_line(it.get("roles", []), accent_hex)
+                if rl is not None:
+                    block.append(rl)
+                block.append(Paragraph(
+                    f'<link href="{_safe_url(it.get("link", "#"))}" color="{accent_hex}">'
+                    f'Keep reading &rarr;</link>', link_p_style))
+                story.append(KeepTogether(sec_intro + block))
+            else:
+                # Compact row: uniform 16:9 thumbnail left, text right.
+                text_cell = [meta,
+                             Paragraph(_safe(it.get("title", "")), st_rtitle),
+                             Paragraph(_safe(it.get("summary", "")), st_rsum),
+                             Paragraph(
+                                 f'<link href="{_safe_url(it.get("link", "#"))}" '
+                                 f'color="{E_ACCENT}">Keep reading &rarr;</link>', st_rmore)]
+                thumb = _pdf_image(it.get("image", ""), THUMB_W, ratio=16 / 9,
+                                   radius=8, min_px=220)
+                if thumb is not None:
+                    text_w = CONTENT_W - THUMB_W - 0.4 * cm
+                    if i % 2 == 0:      # thumbnails alternate sides — no rigid grid
+                        cells, widths = [thumb, text_cell], [THUMB_W + 0.4 * cm, text_w]
+                        pads = [("RIGHTPADDING", (0, 0), (0, 0), 12)]
+                    else:
+                        cells, widths = [text_cell, thumb], [text_w, THUMB_W + 0.4 * cm]
+                        pads = [("LEFTPADDING", (1, 0), (1, 0), 12)]
+                    row = Table([cells], colWidths=widths)
+                    row.setStyle(TableStyle([
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                        ("TOPPADDING", (0, 0), (-1, -1), 0),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+                    ] + pads))
+                    story.append(KeepTogether([row]))
+                else:
+                    story.append(KeepTogether(text_cell))
+
+            story.append(HRFlowable(width="100%", thickness=0.8, color=RULE,
+                                    dash=(2, 3),
+                                    spaceBefore=0.4 * cm, spaceAfter=0.4 * cm))
+
+        story.append(Spacer(1, 0.4 * cm))
 
     # ── Footer ─────────────────────────────────────────────────────
-    story.append(Spacer(1, 0.3 * cm))
-    story.append(HRFlowable(width="100%", thickness=1, color=LINE, spaceAfter=10))
+    story.append(HRFlowable(width="34%", thickness=2.2, color=ACCENT2, spaceAfter=2.5,
+                            hAlign="CENTER"))
+    story.append(HRFlowable(width="20%", thickness=1.0, color=ACCENT, spaceAfter=12,
+                            hAlign="CENTER"))
+    story.append(Paragraph("The AI Dispatch", st_foot_b))
+    story.append(Spacer(1, 0.12 * cm))
     story.append(Paragraph(
-        f"AI News Digest &nbsp;|&nbsp; {date.today().strftime('%B %d, %Y')} "
-        f"&nbsp;|&nbsp; Delivered daily at 9:00 AM IST", st_foot))
-    story.append(Paragraph(
-        "Aggregated from 30+ trusted AI news &amp; research sources", st_foot))
+        "Grown fresh every morning at 9:00 IST &nbsp;&middot;&nbsp; "
+        "from 30+ AI news &amp; research sources", st_foot))
 
-    doc.build(story)
+    doc.build(story, onFirstPage=paint_page, onLaterPages=paint_page)
     return buf.getvalue()
 
 
@@ -683,7 +1098,8 @@ def filter_by_role(digest: dict) -> dict:
 #  SEND
 # ══════════════════════════════════════════════════════════════════════════════
 
-def send_email(html_content: str, pdf_bytes: bytes, item_count: int):
+def send_email(html_content: str, pdf_bytes: bytes, item_count: int,
+               top_title: str = ""):
     if not GMAIL_USER or not GMAIL_APP_PASSWORD:
         raise RuntimeError("Missing GMAIL_USER or GMAIL_APP_PASSWORD env vars.")
 
@@ -693,8 +1109,14 @@ def send_email(html_content: str, pdf_bytes: bytes, item_count: int):
     # TO_EMAIL may list several addresses separated by commas or semicolons.
     recipients = [e.strip() for e in re.split(r"[,;]+", TO_EMAIL) if e.strip()]
 
+    # Lead with the day's best story, newsletter-style; fall back to the count.
+    if top_title:
+        subject = f"🌱 {top_title[:70]}" + ("…" if len(top_title) > 70 else "")
+    else:
+        subject = f"🌱 The AI Dispatch — {today_str} · {item_count} stories"
+
     msg = MIMEMultipart("mixed")
-    msg["Subject"] = f"AI Briefing // {today_str} — {item_count} updates inside"
+    msg["Subject"] = subject
     msg["From"]    = GMAIL_USER
     msg["To"]      = ", ".join(recipients)
 
@@ -724,15 +1146,15 @@ def send_email(html_content: str, pdf_bytes: bytes, item_count: int):
 
 if __name__ == "__main__":
     print("Collecting news...")
-    digest = collect_digest()
+    digest, pulse = collect_digest(with_insights=True)
     digest = filter_by_role(digest)
     count  = sum(len(v) for v in digest.values())
 
     print(f"Building HTML email ({count} items)...")
-    html_content = build_html(digest)
+    html_content = build_html(digest, pulse)
 
     print("Generating PDF...")
-    pdf_bytes = build_pdf(digest)
+    pdf_bytes = build_pdf(digest, pulse)
     print(f"PDF size: {len(pdf_bytes)//1024} KB")
 
     print("Building web edition...")
@@ -750,7 +1172,9 @@ if __name__ == "__main__":
 
     if GMAIL_USER and GMAIL_APP_PASSWORD:
         print("Sending email...")
-        send_email(html_content, pdf_bytes, count)
+        first_items = next(iter(digest.values()), [])
+        top_title = first_items[0].get("title", "") if first_items else ""
+        send_email(html_content, pdf_bytes, count, top_title)
     else:
         print("GMAIL_USER / GMAIL_APP_PASSWORD not set — email skipped.")
         print(f"    Open '{local_pdf}' to preview the PDF output.")

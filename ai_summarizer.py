@@ -21,9 +21,11 @@ import requests
 GROQ_KEY       = os.environ.get("GROQ_API_KEY", "").strip()
 OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 HF_TOKEN       = os.environ.get("HF_TOKEN", "").strip()
+NVIDIA_KEY     = os.environ.get("NVIDIA_API_KEY", "").strip()
 
 # OpenAI-compatible chat endpoints for each provider.
 PROVIDERS = {
+    "nvidia":     {"url": "https://integrate.api.nvidia.com/v1/chat/completions", "key": NVIDIA_KEY},
     "groq":       {"url": "https://api.groq.com/openai/v1/chat/completions",   "key": GROQ_KEY},
     "openrouter": {"url": "https://openrouter.ai/api/v1/chat/completions",     "key": OPENROUTER_KEY},
     "hf":         {"url": "https://router.huggingface.co/v1/chat/completions", "key": HF_TOKEN},
@@ -33,6 +35,8 @@ PROVIDERS = {
 # skipped, so you can enable as few or as many providers as you like. If a model
 # is decommissioned or rate-limited, the request fails and the next one is tried.
 MODEL_CHAIN = [
+    ("nvidia",     "nvidia/nvidia-nemotron-nano-9b-v2"),
+    ("nvidia",     "nvidia/llama-3.3-nemotron-super-49b-v1.5"),
     ("groq",       "llama-3.3-70b-versatile"),
     ("groq",       "llama-3.1-8b-instant"),
     ("groq",       "gemma2-9b-it"),
@@ -44,7 +48,7 @@ MODEL_CHAIN = [
     ("hf",         "mistralai/Mistral-7B-Instruct-v0.3"),
 ]
 
-AI_ENABLED = bool(GROQ_KEY or OPENROUTER_KEY or HF_TOKEN)
+AI_ENABLED = bool(NVIDIA_KEY or GROQ_KEY or OPENROUTER_KEY or HF_TOKEN)
 
 # Model returns short keys; map them back to the digest's canonical labels.
 CATEGORY_MAP = {
@@ -66,11 +70,14 @@ ROLE_MAP = {
 }
 
 SYSTEM_PROMPT = (
-    "You are a sharp AI-industry news editor writing a daily briefing for busy "
-    "tech professionals. Given a headline and description, reply with ONLY a JSON "
-    "object (no markdown, no commentary) with exactly these keys:\n"
-    '  "summary": 2-3 plain factual sentences explaining WHAT happened, WHO is '
-    "involved, and WHY it matters. Self-contained and specific, no hype, no buzzwords.\n"
+    "You are the witty editor of a beloved morning AI newsletter — think a smart "
+    "friend explaining the news over coffee. Given a headline and description, "
+    "reply with ONLY a JSON object (no markdown, no commentary) with exactly these keys:\n"
+    '  "summary": 2-3 conversational sentences. Open with the hook (the thing that '
+    "makes this interesting), then what actually happened and why the reader should "
+    "care. Plain words, light playfulness, zero snark at the expense of facts. "
+    "Banned: 'game-changer', 'revolutionary', 'groundbreaking', 'in the world of', "
+    "starting with 'In a'. Numbers and names beat adjectives.\n"
     '  "category": exactly one of '
     '["model_updates","new_launch","research","good_news","bad_news","awareness","general"].\n'
     '  "roles": an array of 1-3 from '
@@ -85,20 +92,28 @@ def _call(provider: str, model: str, title: str, desc: str) -> str | None:
     if provider == "openrouter":
         headers["HTTP-Referer"] = "https://github.com/401DHARshini/ai-news-digest"
         headers["X-Title"] = "AI News Digest"
+
+    # NVIDIA Nemotron models are reasoning models: by default they burn the token
+    # budget on a <think> pass and leave `content` empty. "detailed thinking off"
+    # switches them to a direct answer so we get clean JSON in one short response.
+    system_prompt = SYSTEM_PROMPT
+    if provider == "nvidia" and "nemotron" in model.lower():
+        system_prompt = "detailed thinking off\n" + SYSTEM_PROMPT
+
     payload = {
         "model": model,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Headline: {title}\nDescription: {desc[:700]}"},
         ],
         "temperature": 0.3,
-        "max_tokens": 320,
+        "max_tokens": 512,
     }
     if provider == "groq":
         payload["response_format"] = {"type": "json_object"}
     resp = requests.post(cfg["url"], headers=headers, json=payload, timeout=30)
     resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"]
+    return resp.json()["choices"][0]["message"].get("content")
 
 
 def _parse(content: str) -> dict | None:
