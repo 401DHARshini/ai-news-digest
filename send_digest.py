@@ -213,9 +213,9 @@ def _article_row(it: dict, num: int, accent: str) -> str:
     if img.lower().startswith(("http://", "https://")):
         pad = "0 0 0 16px" if on_right else "0 16px 0 0"
         radius = _LEAF_R if on_right else _LEAF
-        thumb = (f'<td width="128" style="vertical-align:top;padding:{pad};">'
+        thumb = (f'<td width="128" class="m-thumb" style="vertical-align:top;padding:{pad};">'
                  f'<a href="{link}"><img src="{_url(img)}" width="128" alt="" '
-                 f'style="width:128px;height:auto;display:block;border-radius:{radius};"></a></td>')
+                 f'style="width:100%;max-width:128px;height:auto;display:block;border-radius:{radius};"></a></td>')
     text = f"""
         <td style="vertical-align:top;">
           <div style="margin:0 0 5px;">
@@ -307,9 +307,9 @@ def _stat_tiles(pulse: dict, featured: int, read_min: int) -> str:
     gap = '<td width="8" style="font-size:0;line-height:0;">&nbsp;</td>'
     tds = gap.join(
         f'<td width="25%" style="background:{bg};border-radius:{radius};'
-        f'padding:17px 4px 14px;text-align:center;">'
-        f'<div style="font-family:{SERIF};font-size:28px;font-weight:700;color:{fg};line-height:1;">{v}</div>'
-        f'<div style="font-family:{SANS};font-size:10px;color:{E_MUTED};margin-top:7px;">{l}</div></td>'
+        f'padding:17px 3px 14px;text-align:center;">'
+        f'<div class="m-tilenum" style="font-family:{SERIF};font-size:27px;font-weight:700;color:{fg};line-height:1;">{v}</div>'
+        f'<div class="m-tilecap" style="font-family:{SANS};font-size:9.5px;color:{E_MUTED};margin-top:7px;line-height:1.25;">{l}</div></td>'
         for (v, l), (bg, fg, radius) in zip(tiles, _PEBBLES))
     return (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0">'
             f'<tr>{tds}</tr></table>')
@@ -390,29 +390,44 @@ def build_html(digest: dict, pulse: dict | None = None) -> str:
 
     return f"""<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  /* Mobile-first overrides — the inline styles are the desktop base;
+     these tighten spacing and scale type down on phones. */
+  @media only screen and (max-width:600px) {{
+    .m-pad {{ padding-left:16px !important; padding-right:16px !important; }}
+    .m-title {{ font-size:34px !important; }}
+    .m-sub {{ font-size:12px !important; }}
+    .m-tilenum {{ font-size:21px !important; }}
+    .m-tilecap {{ font-size:8px !important; }}
+    .m-thumb {{ width:92px !important; }}
+    .m-cta {{ display:block !important; }}
+  }}
+  a {{ text-decoration:none; }}
+</style>
+</head>
 <body style="margin:0;padding:0;background:{E_PAPER};">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:{E_PAPER};">
-<tr><td align="center" style="padding:30px 10px 52px;">
-<table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:{E_CARD};border-radius:30px 30px 30px 8px;">
+<tr><td align="center" style="padding:20px 8px 44px;">
+<table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:{E_CARD};border-radius:26px 26px 26px 7px;">
 
-  <tr><td style="background:{E_ACCENT2};background:linear-gradient(135deg,{E_ACCENT2},{E_ACCENT});height:7px;font-size:0;line-height:0;border-radius:30px 30px 0 0;">&nbsp;</td></tr>
+  <tr><td style="background:{E_ACCENT2};background:linear-gradient(135deg,{E_ACCENT2},{E_ACCENT});height:7px;font-size:0;line-height:0;border-radius:26px 26px 0 0;">&nbsp;</td></tr>
 
-  <tr><td style="padding:40px 26px 0;">
-    <div style="font-family:{SANS};font-size:11px;font-weight:700;color:{E_ACCENT};letter-spacing:3.5px;text-transform:uppercase;text-align:center;">&#10047; Artificial Intelligence &middot; Grown Daily &#10047;</div>
-    <div style="font-family:{SERIF};font-size:46px;font-weight:700;color:{E_INK};letter-spacing:-0.8px;line-height:1.05;margin:14px 0 8px;text-align:center;">The AI Dispatch</div>
-    <div style="font-family:{SERIF};font-size:13.5px;font-style:italic;color:{E_MUTED};text-align:center;">{_he(today.title())} &nbsp;&middot;&nbsp; {total} stories &nbsp;&middot;&nbsp; about {read_min} minutes, tea included</div>
+  <tr><td class="m-pad" style="padding:36px 26px 0;">
+    <div style="font-family:{SANS};font-size:11px;font-weight:700;color:{E_ACCENT};letter-spacing:3px;text-transform:uppercase;text-align:center;">&#10047; Artificial Intelligence &middot; Grown Daily &#10047;</div>
+    <div class="m-title" style="font-family:{SERIF};font-size:44px;font-weight:700;color:{E_INK};letter-spacing:-0.8px;line-height:1.05;margin:14px 0 8px;text-align:center;">The AI Dispatch</div>
+    <div class="m-sub" style="font-family:{SERIF};font-size:13.5px;font-style:italic;color:{E_MUTED};text-align:center;">{_he(today.title())} &nbsp;&middot;&nbsp; {total} stories &nbsp;&middot;&nbsp; about {read_min} minutes, tea included</div>
     {nav}
-    <div style="text-align:center;margin-top:14px;"><a href="{WEB_URL}" style="display:inline-block;background:{E_ACCENT};color:#FFFFFF;font-family:{SANS};font-size:12px;font-weight:700;letter-spacing:1px;text-decoration:none;padding:12px 28px;border-radius:{_LEAF};">Read the full edition &rarr;</a></div>
+    <div style="text-align:center;margin-top:14px;"><a href="{WEB_URL}" class="m-cta" style="display:inline-block;background:{E_ACCENT};color:#FFFFFF;font-family:{SANS};font-size:12.5px;font-weight:700;letter-spacing:1px;text-decoration:none;padding:13px 28px;border-radius:{_LEAF};">Read the full edition &rarr;</a></div>
   </td></tr>
 
-  <tr><td style="padding:14px 26px;">
+  <tr><td class="m-pad" style="padding:14px 26px;">
     {board}
     <div style="height:8px;font-size:0;line-height:0;">&nbsp;</div>
     {sections}
   </td></tr>
 
-  <tr><td style="padding:16px 26px 36px;">
+  <tr><td class="m-pad" style="padding:16px 26px 34px;">
     <div style="background:{E_ACCENT2};background:{E_GRAD};height:3px;border-radius:3px;font-size:0;line-height:0;margin-bottom:16px;">&nbsp;</div>
     <div style="font-family:{SERIF};font-size:18px;font-weight:700;color:{E_INK};">The AI Dispatch</div>
     <div style="font-family:{SERIF};font-size:12px;font-style:italic;color:{E_MUTED};margin-top:6px;line-height:1.7;">Grown fresh every morning at 9:00 IST from 30+ AI news &amp; research sources &middot; PDF edition attached &#127807;</div>
@@ -431,150 +446,243 @@ def build_html(digest: dict, pulse: dict | None = None) -> str:
 
 WEB_URL = "https://401dharshini.github.io/ai-news-digest/"
 
-WEB_ACCENT = {
-    "🤖 Model Updates":           "#7C5CFF",
-    "☁️ Cloud AI":                "#2563EB",
-    "🗄️ Data & Databricks":       "#0D9488",
-    "🛠️ Dev Tools & Agents":      "#9333EA",
-    "🧪 Testing & Evals":         "#CA8A04",
-    "🚀 New Launch / Feature":    "#FF6B4A",
-    "🔬 R&D / Research":          "#00B8D9",
-    "✅ Good News / Wins":         "#22C55E",
-    "⚠️ Bad News / Risk":          "#F43F5E",
-    "💡 AI Awareness / Must Know": "#F59E0B",
-    "📰 General AI Update":        "#EC4899",
-}
-
+# Mobile-first "Morning Canopy" web edition — base styles target phones
+# (full-width, single column, scrollable nav); @media(min-width:640px) enhances
+# for larger screens. Matches the email/PDF palette and serif voice.
 _WEB_CSS = r"""
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --green:#5C8A3A;      /* brand green (genai.works family) */
-  --green-d:#436627;    /* darker green for hover / emphasis */
-  --lime:#B1E882;       /* bright accent */
-  --lime-soft:#EAF6DC;  /* pale green wash for chips & tags */
-  --ink:#141A12;        /* headline near-black */
-  --body:#414A3B;       /* body copy */
-  --muted:#889082;      /* meta / captions */
-  --line:#E7EBE1;       /* hairlines & card borders */
-  --card:#FFFFFF;
-  --bg:#F4F7EF;         /* page background */
+  --paper:#F3F5EC; --card:#FFFFFF; --panel:#F6F9EE; --track:#E7EEDB;
+  --ink:#243018; --body:#4A5540; --muted:#8B947E; --line:#E2E8D4;
+  --moss:#648741; --leaf:#B1E882; --clay:#EA965C;
 }
-html{scroll-behavior:smooth;scroll-padding-top:92px}
-body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:var(--body);background:var(--bg);line-height:1.62;-webkit-font-smoothing:antialiased;overflow-x:hidden}
-.wrap{max-width:760px;margin:0 auto;padding:0 18px 80px}
+html{scroll-behavior:smooth;scroll-padding-top:80px}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:var(--body);background:var(--paper);line-height:1.65;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.sf{font-family:'Fraunces',Georgia,'Times New Roman',serif}
+a{-webkit-tap-highlight-color:transparent}
 
-/* masthead */
-.mast{text-align:center;padding:54px 0 20px}
-.mast .kick{display:inline-block;font-size:11px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--green-d);background:var(--lime-soft);padding:7px 16px;border-radius:999px}
-.mast h1{font-size:52px;font-weight:800;line-height:1.02;color:var(--ink);letter-spacing:-1.8px;margin:18px 0 0}
-.mast h1 .dot{color:var(--green)}
-.mast .rule{width:60px;height:4px;background:var(--green);border-radius:4px;margin:16px auto 14px}
-.mast .sub{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted)}
+/* faint canopy behind everything */
+.canopy{position:fixed;top:-40px;right:-40px;width:260px;height:260px;z-index:-1;opacity:.5;pointer-events:none}
 
-/* sticky category nav — the "table of contents" you click to jump */
-.nav{position:sticky;top:10px;z-index:20;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:10px;border-radius:16px;background:rgba(255,255,255,.9);backdrop-filter:blur(14px) saturate(1.4);-webkit-backdrop-filter:blur(14px) saturate(1.4);border:1px solid var(--line);box-shadow:0 8px 28px rgba(20,26,18,.09);margin-bottom:12px}
-.nav a{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--ink);text-decoration:none;padding:7px 13px;border-radius:11px;transition:.2s;white-space:nowrap}
-.nav a .cdot{width:8px;height:8px;border-radius:50%;background:var(--acc,#5C8A3A);flex:none}
-.nav a span{color:var(--muted);font-variant-numeric:tabular-nums}
-.nav a:hover{background:var(--lime-soft)}
-.nav a.active{background:var(--green);color:#fff}
-.nav a.active span{color:rgba(255,255,255,.72)}
-.nav a.active .cdot{background:#fff}
+/* MOBILE FIRST — full width, small gutters */
+.wrap{width:100%;max-width:820px;margin:0 auto;padding:0 15px 72px}
 
-/* section header */
-section{padding:30px 0 4px;scroll-margin-top:92px}
-.sec-h{display:flex;align-items:center;gap:12px;margin-bottom:16px}
-.sec-h .chip{display:inline-flex;align-items:center;font-size:12px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#fff;background:var(--acc);padding:7px 15px;border-radius:999px;white-space:nowrap}
-.sec-h .tag{font-size:13px;color:var(--muted);flex:1;line-height:1.4}
-.sec-h .cnt{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+.mast{text-align:center;padding:40px 0 14px}
+.mast .kick{font-size:10.5px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--moss)}
+.mast h1{font-family:'Fraunces',Georgia,serif;font-size:42px;font-weight:600;line-height:1.02;color:var(--ink);letter-spacing:-.5px;margin:12px 0 0}
+.mast .rule{width:58px;height:3px;background:linear-gradient(90deg,var(--leaf),var(--moss));border-radius:3px;margin:14px auto 12px}
+.mast .sub{font-family:'Fraunces',Georgia,serif;font-style:italic;font-size:13.5px;color:var(--muted)}
 
-/* story card — each news item stands alone */
-.story{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--acc);border-radius:14px;padding:22px 24px;margin-bottom:14px;box-shadow:0 1px 2px rgba(20,26,18,.04);transition:transform .25s,box-shadow .25s}
-.story:hover{transform:translateY(-2px);box-shadow:0 16px 36px rgba(20,26,18,.10)}
-.story .m{display:flex;align-items:center;gap:10px;margin-bottom:8px}
-.story .num{font-size:13px;font-weight:800;color:var(--acc);font-variant-numeric:tabular-nums}
-.story .src{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
-.story h3{font-size:20px;font-weight:700;line-height:1.28;letter-spacing:-.3px;margin:0}
-.story h3 a{color:var(--ink);text-decoration:none;transition:color .2s}
-.story h3 a:hover{color:var(--green)}
-.story img{width:100%;height:auto;display:block;border-radius:10px;margin:14px 0 2px;border:1px solid var(--line)}
-.story p{font-size:15px;color:var(--body);margin-top:10px}
-.tags{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
-.tags span{font-size:11px;font-weight:600;color:var(--green-d);background:var(--lime-soft);padding:3px 10px;border-radius:999px}
-.more{display:inline-block;margin-top:13px;font-size:13px;font-weight:700;color:var(--green);text-decoration:none;transition:color .2s}
-.more:hover{color:var(--green-d)}
+/* sticky nav — scrolls sideways on a phone instead of wrapping into a wall */
+.nav{position:sticky;top:8px;z-index:20;display:flex;gap:7px;overflow-x:auto;padding:9px 10px;border-radius:16px 4px 16px 4px;background:rgba(255,255,255,.9);backdrop-filter:blur(12px) saturate(1.4);-webkit-backdrop-filter:blur(12px) saturate(1.4);border:1px solid var(--line);box-shadow:0 6px 22px rgba(36,48,24,.08);margin-bottom:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.nav::-webkit-scrollbar{display:none}
+.nav a{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--ink);text-decoration:none;padding:8px 13px;border-radius:11px 3px 11px 3px;white-space:nowrap;transition:.2s}
+.nav a .cdot{width:8px;height:8px;border-radius:50%;background:var(--acc,#648741);flex:none}
+.nav a span{color:var(--muted)}
+.nav a.active{background:var(--moss);color:#fff}
+.nav a.active span,.nav a.active .cdot{color:#fff;background:#fff}
 
-/* reveal-on-scroll + footer */
-.reveal{opacity:0;transform:translateY(16px);transition:.6s cubic-bezier(.2,.7,.2,1)}
+/* pulse dashboard */
+.pulse{background:var(--panel);border:1px solid var(--line);border-radius:24px 8px 24px 8px;padding:18px 16px;margin:6px 0 10px}
+.pulse .lbl{font-family:'Fraunces',Georgia,serif;font-style:italic;font-weight:600;font-size:16px;color:var(--moss);margin:18px 0 10px}
+.pulse .lbl:first-child{margin-top:2px}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.tile{background:var(--card);border-radius:18px 6px 18px 6px;padding:16px 8px;text-align:center}
+.tile b{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:27px;color:var(--acc);display:block;line-height:1}
+.tile span{font-size:10.5px;color:var(--muted);display:block;margin-top:6px}
+.bars{display:flex;flex-direction:column;gap:10px}
+.bar{display:grid;grid-template-columns:92px 1fr 28px;align-items:center;gap:9px}
+.bar .bn{font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar .bt{height:11px;background:var(--track);border-radius:6px 2px 6px 2px;overflow:hidden}
+.bar .bf{height:100%;background:var(--moss);border-radius:6px 2px 6px 2px}
+.bar .bv{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:13px;color:var(--moss);text-align:right}
+.cap{font-family:'Fraunces',Georgia,serif;font-style:italic;font-size:11.5px;color:var(--muted);margin-top:12px}
+.topics{display:flex;flex-wrap:wrap;gap:7px}
+.topics span{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink);background:var(--card);border:1px solid var(--line);padding:6px 11px;border-radius:14px 4px 14px 4px}
+.topics span i{width:7px;height:7px;border-radius:50%;flex:none}
+.topics span b{font-family:'Fraunces',Georgia,serif}
+
+/* sections + stories */
+section{padding:26px 0 2px;scroll-margin-top:80px}
+.sec-h{display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
+.sec-h .chip{font-size:12.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--acc)}
+.sec-h .cnt{margin-left:auto;font-family:'Fraunces',Georgia,serif;font-style:italic;font-size:12.5px;color:var(--muted);white-space:nowrap}
+.sec-tag{font-family:'Fraunces',Georgia,serif;font-style:italic;font-size:14px;color:var(--muted);margin:2px 0 18px;border-top:1px dashed var(--line);padding-top:10px}
+
+.hero{margin:0 0 18px}
+.hero img{width:100%;height:auto;display:block;aspect-ratio:16/9;object-fit:cover;border-radius:20px 20px 20px 6px;margin-bottom:13px}
+.mrow{display:flex;align-items:center;gap:9px;margin-bottom:6px}
+.mrow .num{font-family:'Fraunces',Georgia,serif;font-style:italic;font-weight:600;font-size:14px;color:var(--acc)}
+.mrow .src{font-size:10px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted)}
+.hero h3{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:24px;line-height:1.22;color:var(--ink);letter-spacing:-.3px}
+.hero h3 a,.row h3 a{color:inherit;text-decoration:none}
+.hero p{font-size:15px;color:var(--body);margin-top:10px}
+
+.divider{border:0;border-top:1px dashed var(--line);margin:18px 2px}
+
+.row{display:flex;gap:14px;align-items:flex-start}
+.row img{width:108px;flex:none;aspect-ratio:16/9;object-fit:cover;border-radius:14px 4px 14px 4px}
+.row .tx{flex:1;min-width:0}
+.row h3{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:17px;line-height:1.28;color:var(--ink)}
+.row p{font-size:13.5px;color:var(--body);margin-top:6px}
+
+.tags{margin-top:11px;display:flex;flex-wrap:wrap;gap:6px}
+.tags span{font-size:11px;font-weight:600;color:var(--acc);background:var(--panel);border:1px solid var(--line);padding:4px 11px;border-radius:12px 3px 12px 3px}
+.more{display:inline-block;margin-top:11px;font-size:12.5px;font-weight:700;color:var(--acc);text-decoration:none}
+
+.reveal{opacity:0;transform:translateY(14px);transition:.6s cubic-bezier(.2,.7,.2,1)}
 .reveal.in{opacity:1;transform:none}
-.foot{text-align:center;padding:40px 10px 0;margin-top:26px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
-.foot b{color:var(--ink);font-size:18px;font-weight:800;display:block;margin-bottom:6px}
-.foot b .dot{color:var(--green)}
-@media(max-width:560px){.mast h1{font-size:36px}.story{padding:18px 18px}.story h3{font-size:18px}.sec-h{flex-wrap:wrap;gap:8px}.nav{gap:6px;padding:8px}}
+.foot{text-align:center;padding:34px 12px 0;margin-top:22px;border-top:1px dashed var(--line);color:var(--muted);font-size:13px}
+.foot b{font-family:'Fraunces',Georgia,serif;color:var(--ink);font-size:19px;font-weight:600;display:block;margin-bottom:6px}
+
+/* DESKTOP enhancements */
+@media(min-width:640px){
+  .wrap{padding:0 26px 92px}
+  .canopy{width:360px;height:360px;top:-60px;right:-60px}
+  .mast{padding:58px 0 20px}
+  .mast h1{font-size:60px}
+  .mast .sub{font-size:14.5px}
+  .tiles{grid-template-columns:repeat(4,1fr);gap:11px}
+  .tile{padding:18px 10px}
+  .tile b{font-size:31px}
+  .pulse{padding:24px 24px}
+  .hero img{border-radius:26px 26px 26px 8px}
+  .hero h3{font-size:31px}
+  .hero p{font-size:16px}
+  .row img{width:158px}
+  .row h3{font-size:20px}
+  .row p{font-size:14.5px}
+  .row.alt{flex-direction:row-reverse}
+}
+@media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}}
 """
 
 _WEB_JS = r"""
-const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.12});
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.1});
 document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
 const links=new Map([...document.querySelectorAll('.nav a')].map(a=>[a.dataset.t,a]));
-const spy=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){links.forEach(a=>a.classList.remove('active'));const a=links.get(e.target.id);if(a)a.classList.add('active')}}),{rootMargin:'-46% 0px -50% 0px'});
+const spy=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){links.forEach(a=>a.classList.remove('active'));const a=links.get(e.target.id);if(a){a.classList.add('active');a.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'})}}}),{rootMargin:'-44% 0px -52% 0px'});
 document.querySelectorAll('section').forEach(s=>spy.observe(s));
 """
+
+_CANOPY_SVG = (
+    '<svg class="canopy" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">'
+    '<path d="M200 20 C150 40 110 80 70 140" stroke="#648741" stroke-width="2" '
+    'stroke-linecap="round" opacity=".5"/>'
+    '<g fill="#B1E882"><ellipse cx="168" cy="34" rx="15" ry="7" transform="rotate(-32 168 34)"/>'
+    '<ellipse cx="132" cy="62" rx="17" ry="8" transform="rotate(-30 132 62)"/>'
+    '<ellipse cx="100" cy="94" rx="15" ry="7" transform="rotate(-34 100 94)"/></g>'
+    '<g fill="#648741" opacity=".55"><ellipse cx="150" cy="48" rx="13" ry="6" transform="rotate(-30 150 48)"/>'
+    '<ellipse cx="84" cy="118" rx="14" ry="6" transform="rotate(-36 84 118)"/></g></svg>'
+)
 
 _WEB_TEMPLATE = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>The AI Dispatch</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>__CSS__</style></head>
 <body>
+__CANOPY__
 <div class="wrap">
-  <div class="mast reveal"><div class="kick">Artificial Intelligence &middot; Daily Edition</div><h1>The AI Dispatch<span class="dot">.</span></h1><div class="rule"></div><div class="sub">__DATE__ &middot; __TOTAL__ stories &middot; __READ__ min read</div></div>
+  <div class="mast reveal"><div class="kick">&#10047; Artificial Intelligence &middot; Grown Daily &#10047;</div><h1>The AI Dispatch</h1><div class="rule"></div><div class="sub">__DATE__ &middot; __TOTAL__ stories &middot; about __READ__ minutes, tea included</div></div>
   <nav class="nav reveal">__NAV__</nav>
+  __BOARD__
   __SECTIONS__
-  <div class="foot"><b>The AI Dispatch<span class="dot">.</span></b>Delivered daily at 9:00 AM IST &middot; Aggregated from 30+ AI news &amp; research sources</div>
+  <div class="foot"><b>The AI Dispatch</b>Grown fresh every morning at 9:00 IST &middot; from 30+ AI news &amp; research sources &#127807;</div>
 </div>
 <script>__JS__</script></body></html>"""
 
 
-def build_web(digest: dict) -> str:
+def _web_pulse(pulse: dict, total: int, read_min: int) -> str:
+    if not pulse:
+        return ""
+    tiles = [
+        (pulse.get("scanned", total), "scanned this week"),
+        (total,                        "picked for today"),
+        (pulse.get("sources", "—"),    "sources tended"),
+        (read_min,                     "minutes to read"),
+    ]
+    tiles_html = "".join(
+        f'<div class="tile"><b>{v}</b><span>{l}</span></div>' for v, l in tiles)
+
+    models = pulse.get("models", [])
+    bars_html = ""
+    if models:
+        mx = max(n for _, n in models) or 1
+        bars_html = (
+            '<div class="lbl">Most talked-about models</div><div class="bars">'
+            + "".join(
+                f'<div class="bar"><div class="bn">{_he(name)}</div>'
+                f'<div class="bt"><div class="bf" style="width:{max(6, round(n / mx * 100))}%"></div></div>'
+                f'<div class="bv">{n}</div></div>'
+                for name, n in models)
+            + '</div><div class="cap">articles mentioning each family across everything we read this week</div>')
+
+    topics = pulse.get("topics", [])
+    topics_html = ""
+    if topics:
+        chips = "".join(
+            f'<span><i style="background:{CHIP_COLORS[i % len(CHIP_COLORS)]}"></i>'
+            f'{_he(name)}&nbsp;<b style="color:{CHIP_COLORS[i % len(CHIP_COLORS)]}">{n}</b></span>'
+            for i, (name, n) in enumerate(topics))
+        topics_html = f'<div class="lbl">Growing this week</div><div class="topics">{chips}</div>'
+
+    return (f'<div class="pulse reveal"><div class="lbl">The morning pulse</div>'
+            f'<div class="tiles">{tiles_html}</div>{bars_html}{topics_html}</div>')
+
+
+def _web_story(it: dict, num: int, hero: bool) -> str:
+    link = _url(it.get("link", "#"))
+    img = (it.get("image") or "").strip()
+    has_img = img.lower().startswith(("http://", "https://"))
+    meta = (f'<div class="mrow"><span class="num">No.{num:02d}</span>'
+            f'<span class="src">{_he(it.get("source", ""))}</span></div>')
+    if hero:
+        imgtag = f'<img loading="lazy" src="{_url(img)}" alt="">' if has_img else ""
+        roles = "".join(f"<span>{_he(r)}</span>" for r in it.get("roles", [])[:4])
+        tags = f'<div class="tags">{roles}</div>' if roles else ""
+        return (f'<article class="hero reveal">{imgtag}{meta}'
+                f'<h3><a href="{link}" target="_blank" rel="noopener">{_he(it.get("title", ""))}</a></h3>'
+                f'<p>{_he(it.get("summary", ""))}</p>{tags}'
+                f'<a class="more" href="{link}" target="_blank" rel="noopener">Keep reading &rarr;</a></article>')
+    thumb = f'<img loading="lazy" src="{_url(img)}" alt="">' if has_img else ""
+    alt = " alt" if num % 2 == 0 else ""
+    return (f'<article class="row{alt} reveal">{thumb}<div class="tx">{meta}'
+            f'<h3><a href="{link}" target="_blank" rel="noopener">{_he(it.get("title", ""))}</a></h3>'
+            f'<p>{_he(it.get("summary", ""))}</p>'
+            f'<a class="more" href="{link}" target="_blank" rel="noopener">Keep reading &rarr;</a></div></article>')
+
+
+def build_web(digest: dict, pulse: dict | None = None) -> str:
     total = sum(len(v) for v in digest.values())
     read_min = max(2, round(total * 0.4))
     nav = "".join(
-        f'<a href="#{_slug(c)}" data-t="{_slug(c)}" style="--acc:{WEB_ACCENT.get(c, "#5C8A3A")}">'
+        f'<a href="#{_slug(c)}" data-t="{_slug(c)}" style="--acc:{NEON.get(c, E_ACCENT)}">'
         f'<i class="cdot"></i>{_he(CAT_LABEL.get(c, _clean(c)))}'
         f'<span>{len(v)}</span></a>'
         for c, v in digest.items())
     secs = ""
     for c, items in digest.items():
-        acc = WEB_ACCENT.get(c, "#5C8A3A")
-        lbl = _he(CAT_LABEL.get(c, _clean(c)))
+        acc = NEON.get(c, E_ACCENT)
+        lbl = _he(CAT_LABEL.get(c, _clean(c))).upper()
         tag = _he(CAT_TAGLINES.get(c, ""))
         stories = ""
         for i, it in enumerate(items, 1):
-            img = (it.get("image") or "").strip()
-            imgtag = (f'<img loading="lazy" src="{_url(img)}" alt="">'
-                      if img.lower().startswith(("http://", "https://")) else "")
-            roles = "".join(f"<span>{_he(r)}</span>" for r in it.get("roles", [])[:3])
-            tags = f'<div class="tags">{roles}</div>' if roles else ""
-            link = _url(it.get("link", "#"))
-            stories += (
-                f'<article class="story reveal">'
-                f'<div class="m"><span class="num">{i:02d}</span>'
-                f'<span class="src">{_he(it.get("source", ""))}</span></div>'
-                f'<h3><a href="{link}" target="_blank" rel="noopener">{_he(it.get("title", ""))}</a></h3>'
-                f'{imgtag}<p>{_he(it.get("summary", ""))}</p>{tags}'
-                f'<a class="more" href="{link}" target="_blank" rel="noopener">'
-                f'Read the full story &rarr;</a></article>')
+            if i > 1:
+                stories += '<hr class="divider">'
+            stories += _web_story(it, i, hero=(i == 1))
         secs += (
             f'<section id="{_slug(c)}" style="--acc:{acc}">'
-            f'<header class="sec-h reveal"><span class="chip">{lbl}</span>'
-            f'<span class="tag">{tag}</span>'
-            f'<span class="cnt">{len(items)} stories</span></header>'
+            f'<header class="sec-h reveal"><span class="chip">&#9679; {lbl}</span>'
+            f'<span class="cnt">{len(items)} {"story" if len(items) == 1 else "stories"}</span></header>'
+            f'<div class="sec-tag">{tag}</div>'
             f'{stories}</section>')
-    today = date.today().strftime("%A, %B %d, %Y").upper()
+    today = date.today().strftime("%A, %B %d, %Y")
     return (_WEB_TEMPLATE
             .replace("__CSS__", _WEB_CSS).replace("__JS__", _WEB_JS)
+            .replace("__CANOPY__", _CANOPY_SVG)
+            .replace("__BOARD__", _web_pulse(pulse or {}, total, read_min))
             .replace("__NAV__", nav).replace("__SECTIONS__", secs)
             .replace("__DATE__", _he(today))
             .replace("__TOTAL__", str(total)).replace("__READ__", str(read_min)))
@@ -1176,7 +1284,7 @@ if __name__ == "__main__":
     print("Building web edition...")
     os.makedirs("public", exist_ok=True)
     with open(os.path.join("public", "index.html"), "w", encoding="utf-8") as f:
-        f.write(build_web(digest))
+        f.write(build_web(digest, pulse))
     print("Web edition -> public/index.html")
 
     # Save PDF locally for inspection (great for testing without email)
