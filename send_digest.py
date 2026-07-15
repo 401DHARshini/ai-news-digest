@@ -407,31 +407,9 @@ def _index(digest: dict) -> str:
 CHIP_COLORS = ["#2E7DB3", "#C77F0A", "#14876B", "#D14B32",
                "#7B5FC0", "#5C8A2E", "#C2417F", "#A0522D"]
 
-# Stat-tile tints + accents for the active theme (bg, fg, email border-radius).
-_PEBBLES = [(bg, fg, er) for (bg, fg, er, _pr, _lift) in _T["TILES"]]
-
-
 def _label(text: str) -> str:
     return (f'<div style="font-family:{SERIF};font-size:15px;font-style:italic;font-weight:700;'
             f'color:{E_ACCENT};margin:26px 0 12px;">{text}</div>')
-
-
-def _stat_tiles(pulse: dict, featured: int, read_min: int) -> str:
-    tiles = [
-        (str(pulse.get("scanned", featured)), "scanned this week"),
-        (str(featured),                        "picked for today"),
-        (str(pulse.get("sources", "—")),       "sources tended"),
-        (str(read_min),                        "minutes to read"),
-    ]
-    gap = '<td width="8" style="font-size:0;line-height:0;">&nbsp;</td>'
-    tds = gap.join(
-        f'<td width="25%" style="background:{bg};border-radius:{radius};'
-        f'padding:17px 3px 14px;text-align:center;">'
-        f'<div class="m-tilenum" style="font-family:{SERIF};font-size:27px;font-weight:700;color:{fg};line-height:1;">{v}</div>'
-        f'<div class="m-tilecap" style="font-family:{SANS};font-size:9.5px;color:{E_MUTED};margin-top:7px;line-height:1.25;">{l}</div></td>'
-        for (v, l), (bg, fg, radius) in zip(tiles, _PEBBLES))
-    return (f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0">'
-            f'<tr>{tds}</tr></table>')
 
 
 def _model_chart(models: list) -> str:
@@ -478,19 +456,19 @@ def _radar_chips(topics: list) -> str:
 
 
 def _pulse_board(pulse: dict, featured: int, read_min: int) -> str:
-    """The 'Morning Pulse' dashboard: tiles, model chart, trending topics."""
-    if not pulse:
+    """Weekly signal: most-talked-about models + trending themes.
+    (No vanity stat tiles — kept editorial, not a KPI dashboard.)"""
+    if not pulse or not (pulse.get("models") or pulse.get("topics")):
         return ""
+    body = ""
+    if pulse.get("models"):
+        body += _label("Most talked-about models") + _model_chart(pulse["models"])
+    if pulse.get("topics"):
+        body += _label("Growing this week") + _radar_chips(pulse["topics"])
     return (
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'style="background:{E_PANEL};border-radius:26px 8px 26px 8px;"><tr><td style="padding:6px 20px 20px;">'
-        + _label("The morning pulse")
-        + _stat_tiles(pulse, featured, read_min)
-        + _label("Most talked-about models")
-        + _model_chart(pulse.get("models", []))
-        + _label("Growing this week")
-        + _radar_chips(pulse.get("topics", []))
-        + '</td></tr></table>'
+        f'style="background:{E_PANEL};border-radius:26px 8px 26px 8px;"><tr>'
+        f'<td style="padding:6px 20px 20px;">{body}</td></tr></table>'
     )
 
 
@@ -544,8 +522,6 @@ def build_html(digest: dict, pulse: dict | None = None) -> str:
     .m-pad {{ padding-left:16px !important; padding-right:16px !important; }}
     .m-title {{ font-size:34px !important; }}
     .m-sub {{ font-size:12px !important; }}
-    .m-tilenum {{ font-size:21px !important; }}
-    .m-tilecap {{ font-size:8px !important; }}
     .m-thumb {{ width:92px !important; }}
     .m-cta {{ display:block !important; }}
   }}
@@ -631,10 +607,6 @@ a{-webkit-tap-highlight-color:transparent}
 .pulse{background:var(--panel);border:1px solid var(--line);border-radius:24px 8px 24px 8px;padding:18px 16px;margin:6px 0 10px}
 .pulse .lbl{font-family:'Fraunces',Georgia,serif;font-style:italic;font-weight:600;font-size:16px;color:var(--moss);margin:18px 0 10px}
 .pulse .lbl:first-child{margin-top:2px}
-.tiles{display:grid;grid-template-columns:1fr 1fr;gap:9px}
-.tile{background:var(--card);border-radius:18px 6px 18px 6px;padding:16px 8px;text-align:center}
-.tile b{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:27px;color:var(--acc);display:block;line-height:1}
-.tile span{font-size:10.5px;color:var(--muted);display:block;margin-top:6px}
 .bars{display:flex;flex-direction:column;gap:10px}
 .bar{display:grid;grid-template-columns:92px 1fr 28px;align-items:center;gap:9px}
 .bar .bn{font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -702,9 +674,6 @@ section{padding:26px 0 2px;scroll-margin-top:80px}
   .mast{padding:58px 0 20px}
   .mast h1{font-size:60px}
   .mast .sub{font-size:14.5px}
-  .tiles{grid-template-columns:repeat(4,1fr);gap:11px}
-  .tile{padding:18px 10px}
-  .tile b{font-size:31px}
   .pulse{padding:24px 24px}
   .hero img{border-radius:26px 26px 26px 8px}
   .hero h3{font-size:31px}
@@ -760,17 +729,9 @@ __CANOPY__
 
 
 def _web_pulse(pulse: dict, total: int, read_min: int) -> str:
-    if not pulse:
+    """Weekly signal only: model mentions + trending themes. No stat tiles."""
+    if not pulse or not (pulse.get("models") or pulse.get("topics")):
         return ""
-    tiles = [
-        (pulse.get("scanned", total), "scanned this week"),
-        (total,                        "picked for today"),
-        (pulse.get("sources", "—"),    "sources tended"),
-        (read_min,                     "minutes to read"),
-    ]
-    tiles_html = "".join(
-        f'<div class="tile"><b>{v}</b><span>{l}</span></div>' for v, l in tiles)
-
     models = pulse.get("models", [])
     bars_html = ""
     if models:
@@ -793,8 +754,7 @@ def _web_pulse(pulse: dict, total: int, read_min: int) -> str:
             for i, (name, n) in enumerate(topics))
         topics_html = f'<div class="lbl">Growing this week</div><div class="topics">{chips}</div>'
 
-    return (f'<div class="pulse reveal"><div class="lbl">The morning pulse</div>'
-            f'<div class="tiles">{tiles_html}</div>{bars_html}{topics_html}</div>')
+    return f'<div class="pulse reveal">{bars_html}{topics_html}</div>'
 
 
 def _web_body(it: dict) -> str:
@@ -1083,31 +1043,6 @@ def build_pdf(digest: dict, pulse: dict | None = None) -> bytes:
 
     # ── Custom dashboard flowables ─────────────────────────────────
 
-    class _Tiles(Flowable):
-        """Row of stat tiles: serif number + soft caption. Per-theme tints,
-        radii and baseline lifts (canopy varies them; ma keeps them calm)."""
-        PEBBLES = [(bg, fg, pr, lift) for (bg, fg, _er, pr, lift) in _T["TILES"]]
-
-        def __init__(self, tiles, width, height=2.0 * cm, gap=0.28 * cm):
-            super().__init__()
-            self.tiles, self.width, self.height, self.gap = tiles, width, height, gap
-
-        def draw(self):
-            c = self.canv
-            n = len(self.tiles)
-            tw = (self.width - self.gap * (n - 1)) / n
-            for i, (value, caption) in enumerate(self.tiles):
-                bg, fg, rad, lift = self.PEBBLES[i % len(self.PEBBLES)]
-                x = i * (tw + self.gap)
-                c.setFillColor(colors.HexColor(bg))
-                c.roundRect(x, lift, tw, self.height - 3, rad, stroke=0, fill=1)
-                c.setFillColor(colors.HexColor(fg))
-                c.setFont(SER_B, 21)
-                c.drawCentredString(x + tw / 2, lift + self.height - 0.95 * cm, str(value))
-                c.setFillColor(MUTED)
-                c.setFont(SANS_R, 7)
-                c.drawCentredString(x + tw / 2, lift + 0.34 * cm, caption)
-
     class _NeonBars(Flowable):
         """Horizontal bar chart: label | rounded track+bar | value. Moss, one hue."""
         ROW_H = 0.62 * cm
@@ -1300,15 +1235,7 @@ def build_pdf(digest: dict, pulse: dict | None = None) -> bytes:
     story.append(Paragraph(_safe(_T["GREETING"]), st_subline))
     story.append(Spacer(1, 0.5 * cm))
 
-    if pulse:
-        story.append(Paragraph("The morning pulse", st_label))
-        story.append(_Tiles([
-            (pulse.get("scanned", total), "scanned this week"),
-            (total,                        "picked for today"),
-            (pulse.get("sources", "—"),    "sources tended"),
-            (read_min,                     "minutes to read"),
-        ], CONTENT_W))
-        story.append(Spacer(1, 0.1 * cm))
+    if pulse:   # weekly signal only — no vanity stat tiles
         if pulse.get("models"):
             story.append(Paragraph("Most talked-about models", st_label))
             story.append(_NeonBars(pulse["models"], CONTENT_W))
