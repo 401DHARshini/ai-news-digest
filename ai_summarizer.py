@@ -70,18 +70,22 @@ ROLE_MAP = {
 }
 
 SYSTEM_PROMPT = (
-    "You are the witty editor of a beloved morning AI newsletter — think a smart "
-    "friend explaining the news over coffee. Given a headline and description, "
-    "reply with ONLY a JSON object (no markdown, no commentary) with exactly these keys:\n"
-    '  "summary": 2-3 conversational sentences. Open with the hook (the thing that '
-    "makes this interesting), then what actually happened and why the reader should "
-    "care. Plain words, light playfulness, zero snark at the expense of facts. "
-    "Banned: 'game-changer', 'revolutionary', 'groundbreaking', 'in the world of', "
-    "starting with 'In a'. Numbers and names beat adjectives.\n"
+    "You are the editor of a punchy morning AI newsletter people actually finish. "
+    "Given a headline and description, reply with ONLY a JSON object (no markdown, "
+    "no commentary) with exactly these keys:\n"
+    '  "hook": ONE line (max 110 chars) that makes a busy reader stop scrolling — '
+    "conversational, specific, a little sly. Never promise what the facts don't back.\n"
+    '  "details": array of 2-3 short bullets with the concrete facts — names, '
+    "numbers, dates, who did what. Each under 120 chars, no filler.\n"
+    '  "why": one sentence on why the reader should care — concrete stakes, '
+    'never starting with "This".\n'
     '  "category": exactly one of '
     '["model_updates","new_launch","research","good_news","bad_news","awareness","general"].\n'
     '  "roles": an array of 1-3 from '
     '["developer","tester","ai_engineer","architect","product","everyone"] - who should care.\n'
+    "Banned everywhere: 'game-changer', 'revolutionary', 'groundbreaking', "
+    "'in the world of', 'delve', 'the reader', 'users can now', 'it is important'. "
+    "Write like you'd text a sharp friend, not like a homework answer. "
     "Output must be valid JSON."
 )
 
@@ -127,8 +131,15 @@ def _parse(content: str) -> dict | None:
         obj = json.loads(match.group())
     except json.JSONDecodeError:
         return None
-    summary = str(obj.get("summary", "")).strip()
-    if not summary:
+    hook = str(obj.get("hook", "")).strip()
+    raw_details = obj.get("details", [])
+    if not isinstance(raw_details, list):
+        raw_details = [raw_details]
+    details = [str(d).strip() for d in raw_details if str(d).strip()][:3]
+    why = str(obj.get("why", "")).strip()
+    # Plain-text summary kept for backward compatibility (PDF rows, dedupe, web).
+    summary = " ".join(details) if details else str(obj.get("summary", "")).strip()
+    if not (summary or hook):
         return None
     category = CATEGORY_MAP.get(str(obj.get("category", "")).strip().lower(), "📰 General AI Update")
     roles_in = obj.get("roles", [])
@@ -137,7 +148,10 @@ def _parse(content: str) -> dict | None:
     roles = [ROLE_MAP[r.strip().lower()] for r in roles_in
              if isinstance(r, str) and r.strip().lower() in ROLE_MAP]
     return {
-        "summary": summary[:400],
+        "summary": (summary or hook)[:500],
+        "hook": hook[:140],
+        "details": [d[:160] for d in details],
+        "why": why[:220],
         "category": category,
         "roles": roles or ["🌍 AI Awareness (Everyone)"],
     }

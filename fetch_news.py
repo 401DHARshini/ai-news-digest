@@ -7,6 +7,8 @@ item down to one crisp "explain it to a friend before the exam" line.
 import os
 import re
 import html
+import time
+import calendar
 import feedparser
 import requests
 from datetime import datetime, timedelta, timezone
@@ -328,6 +330,7 @@ def fetch_rss_items():
                     "roles": tag_roles(combined),
                     "ai_powered": False,
                     "fresh": within_lookback(published_struct),
+                    "ts": calendar.timegm(published_struct) if published_struct else None,
                 })
         except Exception as e:
             print(f"[warn] failed to parse {feed_url}: {e}")
@@ -359,6 +362,12 @@ def fetch_newsapi_items():
             link = art.get("url", "")
             if not title or not link:
                 continue
+            ts = None
+            try:
+                pa = art.get("publishedAt") or ""
+                ts = datetime.fromisoformat(pa.replace("Z", "+00:00")).timestamp()
+            except Exception:
+                pass
             combined = f"{title} {summary}"
             items.append({
                 "title": title,
@@ -369,6 +378,7 @@ def fetch_newsapi_items():
                 "category": categorize(combined),
                 "roles": tag_roles(combined),
                 "ai_powered": False,
+                "ts": ts,
             })
     except Exception as e:
         print(f"[warn] NewsAPI fetch failed: {e}")
@@ -407,6 +417,9 @@ def enrich_digest(digest: dict) -> None:
             res = ai_enrich(it["title"], it.get("summary", ""))
             if res:
                 it["summary"] = res["summary"]
+                for key in ("hook", "details", "why"):
+                    if res.get(key):
+                        it[key] = res[key]
                 if res.get("roles"):
                     it["roles"] = res["roles"]
                 it["ai_powered"] = True
@@ -430,10 +443,15 @@ def collect_digest(max_per_category: int = 5, with_insights: bool = False):
 
     # The digest shows only fresh (last ~26h) stories; the full trailing-week
     # set feeds the Pulse dashboard (insights) below.
+    for it in tracker_items:
+        it.setdefault("ts", time.time())      # tracker finds are brand new
     grouped = {}
     for it in all_items:
         if it.get("fresh", True):
             grouped.setdefault(it["category"], []).append(it)
+    # Newest first inside every category — the digest leads with what just broke.
+    for items in grouped.values():
+        items.sort(key=lambda it: it.get("ts") or 0, reverse=True)
 
     # category display order — model updates first, awareness last
     order = [

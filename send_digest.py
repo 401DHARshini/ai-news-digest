@@ -8,6 +8,7 @@ import os
 import io
 import re
 import sys
+import time
 import smtplib
 from datetime import date
 from email.mime.multipart import MIMEMultipart
@@ -96,38 +97,109 @@ CAT_ACCENT = {
     "📰 General AI Update":        "#64748B",
 }
 
-# Shared font stacks (render reliably across email clients)
+# Shared sans stack (renders reliably across email clients)
 SANS  = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
-SERIF = "Georgia,'Iowan Old Style','Times New Roman',serif"
 
-# "Morning Canopy" palette — serene, natural, hopeful. Shared by email AND PDF.
-E_PAPER   = "#F3F5EC"   # misty morning air behind the card
-E_CARD    = "#FFFFFF"   # the page itself
-E_PANEL   = "#F6F9EE"   # dew-tinted panels (dashboard, chips)
-E_INK     = "#243018"   # deep forest ink
-E_BODY    = "#4A5540"   # body copy
-E_MUTED   = "#8B947E"   # captions / labels
-E_RULE    = "#E2E8D4"   # hairlines
-E_ACCENT  = "#648741"   # moss — primary accent
-E_ACCENT2 = "#B1E882"   # spring leaf — gradient partner
-E_CLAY    = "#EA965C"   # warm clay — sparing warm touch
-E_GRAD    = f"linear-gradient(90deg,{E_ACCENT},{E_ACCENT2})"
-
-# Natural tone per category (numbers, section kickers) — email + PDF.
-# Each always appears beside its printed name, never as the only identifier.
-NEON = {
-    "🤖 Model Updates":           "#648741",   # moss
-    "☁️ Cloud AI":                "#2E7DB3",   # lake
-    "🗄️ Data & Databricks":       "#14876B",   # pine
-    "🛠️ Dev Tools & Agents":      "#7B5FC0",   # wildflower
-    "🧪 Testing & Evals":         "#C77F0A",   # honey
-    "🚀 New Launch / Feature":    "#C2417F",   # berry
-    "🔬 R&D / Research":          "#5C8A2E",   # sprout
-    "✅ Good News / Wins":         "#3F9C5B",   # meadow
-    "⚠️ Bad News / Risk":          "#D14B32",   # terracotta storm
-    "💡 AI Awareness / Must Know": "#B98514",   # amber
-    "📰 General AI Update":        "#7C8577",   # river stone
+# ── Theme system ────────────────────────────────────────────────────────────
+# Each theme supplies the full serene palette, a serif "voice", a corner
+# language, motif glyphs, and the per-category accent map. Pick one with the
+# THEME env var / GitHub secret (default: "canopy"). Everything downstream —
+# email, PDF, web — reads the module-level E_*/NEON/SERIF set below, so the
+# whole product re-themes from this one choice. Category/role STRINGS are
+# unchanged (they are dict keys); only their colours differ per theme.
+THEMES = {
+    # Morning Canopy — natural, hopeful, growth. Warm paper, moss + leaf.
+    "canopy": {
+        "label":  "Morning Canopy",
+        "PAPER":  "#F3F5EC", "CARD": "#FFFFFF", "PANEL": "#F6F9EE",
+        "INK":    "#243018", "BODY": "#4A5540", "MUTED": "#8B947E", "RULE": "#E2E8D4",
+        "ACCENT": "#648741", "ACCENT2": "#B1E882", "CLAY": "#EA965C",
+        "TRACK":  "#E7EEDB", "PDFPAGE": "#FBFCF6",
+        "SERIF":  "Georgia,'Iowan Old Style','Times New Roman',serif",
+        "WEB_SERIF_NAME": "'Fraunces'",
+        "WEB_FONT_LINK": "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700;800&display=swap",
+        "CORNER": ("16px 4px 16px 4px", "4px 16px 4px 16px"),  # leaf L / R
+        "CARD_R": "26px 26px 26px 7px",
+        "ORNAMENT": "&#10047;",     # ❋ blossom
+        "SIGNOFF":  " &#127807;",   # 🌱 seedling
+        "KICKER":   "Grown Daily",
+        "SUBTAIL":  "tea included",
+        "GREETING": "Good morning — here's what grew in AI overnight.",
+        # Real photography (Unsplash CDN) — sunlit forest canopy.
+        "BANNER":   "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1280&h=300&q=60",
+        "FOOTNOTE": "Grown fresh every morning at 9:00 IST from 30+ AI news &amp; research sources",
+        # (bg, fg, email-radius, pdf-radius, pdf-lift) per stat tile
+        "TILES": [
+            ("#EFF5E2", "#648741", "26px 10px 22px 12px", 14, 0),
+            ("#E9F2EE", "#2E7DB3", "12px 24px 10px 22px", 20, 3),
+            ("#FBF2E2", "#C77F0A", "22px 12px 26px 10px", 12, 0),
+            ("#F2EFF8", "#7B5FC0", "10px 22px 12px 26px", 18, 3),
+        ],
+        "NEON": {
+            "🤖 Model Updates":           "#648741", "☁️ Cloud AI": "#2E7DB3",
+            "🗄️ Data & Databricks":       "#14876B", "🛠️ Dev Tools & Agents": "#7B5FC0",
+            "🧪 Testing & Evals":         "#C77F0A", "🚀 New Launch / Feature": "#C2417F",
+            "🔬 R&D / Research":          "#5C8A2E", "✅ Good News / Wins": "#3F9C5B",
+            "⚠️ Bad News / Risk":          "#D14B32", "💡 AI Awareness / Must Know": "#B98514",
+            "📰 General AI Update":        "#7C8577",
+        },
+    },
+    # Ma (間) — sky & cloud. Japanese negative space: cool, airy, spacious,
+    # quiet near-square corners, a single dusty-sky accent used sparingly.
+    "ma": {
+        "label":  "Ma — Sky & Cloud",
+        "PAPER":  "#F6F7F9", "CARD": "#FFFFFF", "PANEL": "#EDF1F6",
+        "INK":    "#23282F", "BODY": "#4C545E", "MUTED": "#949BA4", "RULE": "#E1E7EE",
+        "ACCENT": "#6E8FC0", "ACCENT2": "#B7CCE6", "CLAY": "#C9B89A",
+        "TRACK":  "#E4EAF1", "PDFPAGE": "#FAFBFC",
+        "SERIF":  "'Iowan Old Style',Palatino,Georgia,'Times New Roman',serif",
+        "WEB_SERIF_NAME": "'Spectral'",
+        "WEB_FONT_LINK": "https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700;800&display=swap",
+        "CORNER": ("4px", "4px"),   # quiet, near-square
+        "CARD_R": "6px",
+        "ORNAMENT": "&#9675;",      # ○ ensō circle — open space
+        "SIGNOFF":  "",
+        "KICKER":   "Room to Think",
+        "SUBTAIL":  "unhurried",
+        "GREETING": "Good morning. Here's what moved in AI while you slept.",
+        # Real photography (Unsplash CDN) — misty blue ridgeline, verified tone.
+        "BANNER":   "https://images.unsplash.com/photo-1487621167305-5d248087c724?auto=format&fit=crop&w=1280&h=300&q=60",
+        "FOOTNOTE": "Sent into the quiet every morning at 9:00 IST, from 30+ AI news &amp; research sources",
+        "TILES": [
+            ("#EEF2F8", "#6E8FC0", "6px", 6, 0),
+            ("#EBF0F5", "#5E8E86", "6px", 6, 0),
+            ("#F0F1F6", "#8481B8", "6px", 6, 0),
+            ("#ECEFF4", "#7C93CC", "6px", 6, 0),
+        ],
+        # Quiet the web edition's leaf corners into clean, near-square radii.
+        "WEB_RADII": {
+            "16px 4px 16px 4px": "12px", "11px 3px 11px 3px": "8px",
+            "24px 8px 24px 8px": "10px", "18px 6px 18px 6px": "10px",
+            "14px 4px 14px 4px": "8px", "20px 20px 20px 6px": "10px",
+            "12px 3px 12px 3px": "6px", "26px 26px 26px 8px": "12px",
+        },
+        # Muted, cool-leaning tones — distinct but calm; always beside a label.
+        "NEON": {
+            "🤖 Model Updates":           "#6E8FC0", "☁️ Cloud AI": "#5FA3C4",
+            "🗄️ Data & Databricks":       "#5E9E93", "🛠️ Dev Tools & Agents": "#8481B8",
+            "🧪 Testing & Evals":         "#B99A57", "🚀 New Launch / Feature": "#C48BA6",
+            "🔬 R&D / Research":          "#7C93CC", "✅ Good News / Wins": "#6BA88C",
+            "⚠️ Bad News / Risk":          "#C77B72", "💡 AI Awareness / Must Know": "#B6935A",
+            "📰 General AI Update":        "#97A0AC",
+        },
+    },
 }
+
+THEME_NAME = (os.environ.get("THEME") or "canopy").strip().lower()
+_T = THEMES.get(THEME_NAME, THEMES["canopy"])
+
+# Module-level palette everything else reads (kept as flat names for reach).
+E_PAPER, E_CARD, E_PANEL = _T["PAPER"], _T["CARD"], _T["PANEL"]
+E_INK, E_BODY, E_MUTED, E_RULE = _T["INK"], _T["BODY"], _T["MUTED"], _T["RULE"]
+E_ACCENT, E_ACCENT2, E_CLAY = _T["ACCENT"], _T["ACCENT2"], _T["CLAY"]
+E_GRAD = f"linear-gradient(90deg,{E_ACCENT},{E_ACCENT2})"
+SERIF  = _T["SERIF"]
+NEON   = _T["NEON"]
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -149,9 +221,21 @@ def _slug(category: str) -> str:
     return "sec-" + (re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "x")
 
 
-# Leaf shape: opposite corners rounded, opposite corners pinched.
-_LEAF = "16px 4px 16px 4px"
-_LEAF_R = "4px 16px 4px 16px"
+# Corner language for the active theme (leaf pinch for canopy; quiet square for ma).
+_LEAF, _LEAF_R = _T["CORNER"]
+
+
+def _age(ts) -> str:
+    """'just in' / '3h ago' / 'yesterday' — visible proof the news is fresh."""
+    if not ts:
+        return ""
+    h = (time.time() - ts) / 3600
+    if h < 1:
+        return "just in"
+    if h < 24:
+        return f"{int(h)}h ago"
+    d = int(h // 24)
+    return "yesterday" if d == 1 else f"{d}d ago"
 
 
 def _role_chips(roles: list, accent: str) -> str:
@@ -171,8 +255,52 @@ def _dashed_rule() -> str:
             f'margin:24px 12px 24px;font-size:0;line-height:0;">&nbsp;</div>')
 
 
+def _meta_line(it: dict, num: int, accent: str, big: bool = True) -> str:
+    age = _age(it.get("ts"))
+    age_html = (f'<span style="font-family:{SANS};font-size:{"10.5" if big else "9.5"}px;'
+                f'font-weight:700;color:{accent};letter-spacing:1.5px;text-transform:uppercase;">'
+                f'&nbsp;&middot;&nbsp; {age}</span>') if age else ""
+    return (f'<div style="margin:0 0 {"8" if big else "5"}px;">'
+            f'<span style="font-family:{SERIF};font-size:{"16" if big else "13"}px;font-weight:700;'
+            f'font-style:italic;color:{accent};">No.{num:02d}</span>'
+            f'<span style="font-family:{SANS};font-size:{"10.5" if big else "9.5"}px;font-weight:700;'
+            f'color:{E_MUTED};letter-spacing:1.8px;text-transform:uppercase;">&nbsp;&nbsp;'
+            f'{_he(it.get("source",""))}</span>{age_html}</div>')
+
+
+def _story_body(it: dict, accent: str, big: bool = True) -> str:
+    """Newsletter flow: hook standfirst → fact bullets → 'Why it matters'.
+    Falls back to the plain summary paragraph when enrichment didn't run."""
+    fs_hook = "16.5px" if big else "14px"
+    fs_body = "14.5px" if big else "13px"
+    hook, details, why = it.get("hook"), it.get("details"), it.get("why")
+    parts = []
+    if hook:
+        parts.append(
+            f'<div style="font-family:{SERIF};font-size:{fs_hook};font-style:italic;'
+            f'color:{E_INK};line-height:1.5;margin:10px 0 0;">{_he(hook)}</div>')
+    if details:
+        rows = "".join(
+            f'<div style="font-family:{SANS};font-size:{fs_body};color:{E_BODY};line-height:1.6;'
+            f'padding:3px 0 3px 16px;text-indent:-16px;">'
+            f'<span style="color:{accent};font-weight:700;">&bull;&nbsp;</span>{_he(d)}</div>'
+            for d in details)
+        parts.append(f'<div style="margin:9px 0 0;">{rows}</div>')
+    if not hook and not details:
+        parts.append(
+            f'<div style="font-family:{SANS};font-size:{fs_body};color:{E_BODY};'
+            f'line-height:1.68;margin:10px 0 0;">{_he(it.get("summary",""))}</div>')
+    if why:
+        parts.append(
+            f'<div style="background:{E_PANEL};border-left:3px solid {accent};border-radius:0;'
+            f'padding:9px 13px;margin:12px 0 0;font-family:{SANS};font-size:{fs_body};'
+            f'color:{E_BODY};line-height:1.55;">'
+            f'<span style="font-weight:700;color:{accent};">Why it matters&nbsp;&rarr;</span> {_he(why)}</div>')
+    return "".join(parts)
+
+
 def _article_hero(it: dict, num: int, accent: str, lead: bool = False) -> str:
-    """Section opener: full-width image, big serif headline, drop cap on the lead."""
+    """Section opener: full-width real image, serif headline, hook + bullets + why."""
     link = _url(it.get("link", "#"))
     img = (it.get("image") or "").strip()
     imgtag = ""
@@ -181,23 +309,14 @@ def _article_hero(it: dict, num: int, accent: str, lead: bool = False) -> str:
                   f'style="width:100%;max-width:100%;height:auto;display:block;'
                   f'border-radius:22px 22px 22px 5px;margin:0 0 16px;"></a>')
     title_size = 27 if lead else 22
-    summary = _he(it.get("summary", ""))
-    if lead and summary:
-        summary = (f'<span style="font-family:{SERIF};font-size:44px;font-weight:700;color:{accent};'
-                   f'line-height:0.85;float:left;padding:5px 8px 0 0;">{summary[0]}</span>{summary[1:]}')
     return f"""
     <div style="margin:0 0 6px;">
       {imgtag}
-      <div style="margin:0 0 8px;">
-        <span style="font-family:{SERIF};font-size:16px;font-weight:700;font-style:italic;color:{accent};">No.{num:02d}</span>
-        <span style="font-family:{SANS};font-size:10.5px;font-weight:700;color:{E_MUTED};letter-spacing:1.8px;text-transform:uppercase;">&nbsp;&nbsp;{_he(it.get('source',''))}</span>
-      </div>
+      {_meta_line(it, num, accent, big=True)}
       <div style="font-family:{SERIF};font-size:{title_size}px;font-weight:700;color:{E_INK};line-height:1.25;letter-spacing:-0.3px;">
         <a href="{link}" style="color:{E_INK};text-decoration:none;">{_he(it.get('title',''))}</a>
       </div>
-      <div style="font-family:{SANS};font-size:15px;color:{E_BODY};line-height:1.7;margin:12px 0 0;">
-        {summary}
-      </div>
+      {_story_body(it, accent, big=True)}
       {_role_chips(it.get('roles', []), accent)}
       <a href="{link}" style="display:inline-block;font-family:{SANS};font-size:12.5px;font-weight:700;color:{accent};text-decoration:none;margin-top:13px;">Keep reading &rarr;</a>
     </div>
@@ -216,18 +335,21 @@ def _article_row(it: dict, num: int, accent: str) -> str:
         thumb = (f'<td width="128" class="m-thumb" style="vertical-align:top;padding:{pad};">'
                  f'<a href="{link}"><img src="{_url(img)}" width="128" alt="" '
                  f'style="width:100%;max-width:128px;height:auto;display:block;border-radius:{radius};"></a></td>')
+    blurb = it.get("hook") or it.get("summary", "")
+    why = it.get("why", "")
+    why_html = (f'<div style="font-family:{SANS};font-size:12.5px;color:{E_BODY};line-height:1.55;'
+                f'margin:5px 0 0;"><span style="font-weight:700;color:{accent};">Why it matters '
+                f'&rarr;</span> {_he(why)}</div>') if why else ""
     text = f"""
         <td style="vertical-align:top;">
-          <div style="margin:0 0 5px;">
-            <span style="font-family:{SERIF};font-size:13px;font-weight:700;font-style:italic;color:{accent};">No.{num:02d}</span>
-            <span style="font-family:{SANS};font-size:9.5px;font-weight:700;color:{E_MUTED};letter-spacing:1.5px;text-transform:uppercase;">&nbsp;&nbsp;{_he(it.get('source',''))}</span>
-          </div>
+          {_meta_line(it, num, accent, big=False)}
           <div style="font-family:{SERIF};font-size:17px;font-weight:700;color:{E_INK};line-height:1.3;">
             <a href="{link}" style="color:{E_INK};text-decoration:none;">{_he(it.get('title',''))}</a>
           </div>
-          <div style="font-family:{SANS};font-size:13px;color:{E_BODY};line-height:1.6;margin:6px 0 0;">
-            {_he(it.get('summary',''))}
+          <div style="font-family:{SERIF};font-size:13.5px;font-style:italic;color:{E_BODY};line-height:1.55;margin:6px 0 0;">
+            {_he(blurb)}
           </div>
+          {why_html}
           <a href="{link}" style="display:inline-block;font-family:{SANS};font-size:12px;font-weight:700;color:{accent};text-decoration:none;margin-top:9px;">Keep reading &rarr;</a>
         </td>"""
     cells = f"{text}{thumb}" if on_right else f"{thumb}{text}"
@@ -285,11 +407,8 @@ def _index(digest: dict) -> str:
 CHIP_COLORS = ["#2E7DB3", "#C77F0A", "#14876B", "#D14B32",
                "#7B5FC0", "#5C8A2E", "#C2417F", "#A0522D"]
 
-# Pebble tints + accents for the stat tiles — each one its own little stone.
-_PEBBLES = [("#EFF5E2", "#648741", "26px 10px 22px 12px"),
-            ("#E9F2EE", "#2E7DB3", "12px 24px 10px 22px"),
-            ("#FBF2E2", "#C77F0A", "22px 12px 26px 10px"),
-            ("#F2EFF8", "#7B5FC0", "10px 22px 12px 26px")]
+# Stat-tile tints + accents for the active theme (bg, fg, email border-radius).
+_PEBBLES = [(bg, fg, er) for (bg, fg, er, _pr, _lift) in _T["TILES"]]
 
 
 def _label(text: str) -> str:
@@ -375,11 +494,38 @@ def _pulse_board(pulse: dict, featured: int, read_min: int) -> str:
     )
 
 
+def _glance(digest: dict) -> str:
+    """'Today at a glance' — one hook per section, scannable in ten seconds."""
+    rows = []
+    for cat, items in list(digest.items())[:6]:
+        if not items:
+            continue
+        it = items[0]
+        accent = NEON.get(cat, E_ACCENT)
+        line = _he(it.get("hook") or it.get("title", ""))
+        rows.append(
+            f'<div style="padding:6px 0;font-family:{SANS};font-size:13.5px;color:{E_INK};'
+            f'line-height:1.5;"><a href="#{_slug(cat)}" style="color:{E_INK};text-decoration:none;">'
+            f'<span style="color:{accent};font-weight:700;">&bull;&nbsp;</span>{line}</a></div>')
+    if not rows:
+        return ""
+    return (f'<div style="margin:22px 0 0;padding:16px 18px;background:{E_PANEL};'
+            f'border-radius:{_LEAF};">'
+            f'<div style="font-family:{SERIF};font-size:15px;font-style:italic;font-weight:700;'
+            f'color:{E_ACCENT};margin:0 0 6px;">Today at a glance</div>{"".join(rows)}</div>')
+
+
 def build_html(digest: dict, pulse: dict | None = None) -> str:
     today = date.today().strftime("%A, %B %d, %Y").upper()
     total = sum(len(v) for v in digest.values())
     read_min = max(2, round(total * 0.4))
 
+    banner = (f'<img src="{_T["BANNER"]}" width="640" alt="" '
+              f'style="width:100%;max-width:100%;height:auto;display:block;">'
+              if _T.get("BANNER") else "")
+    greeting = (f'<div style="font-family:{SERIF};font-size:15.5px;font-style:italic;'
+                f'color:{E_BODY};text-align:center;margin:18px 0 0;">{_T["GREETING"]}</div>')
+    glance = _glance(digest)
     nav = _index(digest) if digest else ""
     board = _pulse_board(pulse or {}, total, read_min)
     sections = "".join(_section(cat, items, first=(i == 0))
@@ -412,11 +558,14 @@ def build_html(digest: dict, pulse: dict | None = None) -> str:
 <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:{E_CARD};border-radius:26px 26px 26px 7px;">
 
   <tr><td style="background:{E_ACCENT2};background:linear-gradient(135deg,{E_ACCENT2},{E_ACCENT});height:7px;font-size:0;line-height:0;border-radius:26px 26px 0 0;">&nbsp;</td></tr>
+  <tr><td style="font-size:0;line-height:0;">{banner}</td></tr>
 
-  <tr><td class="m-pad" style="padding:36px 26px 0;">
-    <div style="font-family:{SANS};font-size:11px;font-weight:700;color:{E_ACCENT};letter-spacing:3px;text-transform:uppercase;text-align:center;">&#10047; Artificial Intelligence &middot; Grown Daily &#10047;</div>
+  <tr><td class="m-pad" style="padding:30px 26px 0;">
+    <div style="font-family:{SANS};font-size:11px;font-weight:700;color:{E_ACCENT};letter-spacing:3px;text-transform:uppercase;text-align:center;">{_T['ORNAMENT']} Artificial Intelligence &middot; {_T['KICKER']} {_T['ORNAMENT']}</div>
     <div class="m-title" style="font-family:{SERIF};font-size:44px;font-weight:700;color:{E_INK};letter-spacing:-0.8px;line-height:1.05;margin:14px 0 8px;text-align:center;">The AI Dispatch</div>
-    <div class="m-sub" style="font-family:{SERIF};font-size:13.5px;font-style:italic;color:{E_MUTED};text-align:center;">{_he(today.title())} &nbsp;&middot;&nbsp; {total} stories &nbsp;&middot;&nbsp; about {read_min} minutes, tea included</div>
+    <div class="m-sub" style="font-family:{SERIF};font-size:13.5px;font-style:italic;color:{E_MUTED};text-align:center;">{_he(today.title())} &nbsp;&middot;&nbsp; {total} stories &nbsp;&middot;&nbsp; about {read_min} minutes, {_T['SUBTAIL']}</div>
+    {greeting}
+    {glance}
     {nav}
     <div style="text-align:center;margin-top:14px;"><a href="{WEB_URL}" class="m-cta" style="display:inline-block;background:{E_ACCENT};color:#FFFFFF;font-family:{SANS};font-size:12.5px;font-weight:700;letter-spacing:1px;text-decoration:none;padding:13px 28px;border-radius:{_LEAF};">Read the full edition &rarr;</a></div>
   </td></tr>
@@ -430,7 +579,7 @@ def build_html(digest: dict, pulse: dict | None = None) -> str:
   <tr><td class="m-pad" style="padding:16px 26px 34px;">
     <div style="background:{E_ACCENT2};background:{E_GRAD};height:3px;border-radius:3px;font-size:0;line-height:0;margin-bottom:16px;">&nbsp;</div>
     <div style="font-family:{SERIF};font-size:18px;font-weight:700;color:{E_INK};">The AI Dispatch</div>
-    <div style="font-family:{SERIF};font-size:12px;font-style:italic;color:{E_MUTED};margin-top:6px;line-height:1.7;">Grown fresh every morning at 9:00 IST from 30+ AI news &amp; research sources &middot; PDF edition attached &#127807;</div>
+    <div style="font-family:{SERIF};font-size:12px;font-style:italic;color:{E_MUTED};margin-top:6px;line-height:1.7;">{_T['FOOTNOTE']} &middot; PDF edition attached{_T['SIGNOFF']}</div>
   </td></tr>
 
 </table>
@@ -451,11 +600,7 @@ WEB_URL = "https://401dharshini.github.io/ai-news-digest/"
 # for larger screens. Matches the email/PDF palette and serif voice.
 _WEB_CSS = r"""
 *{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --paper:#F3F5EC; --card:#FFFFFF; --panel:#F6F9EE; --track:#E7EEDB;
-  --ink:#243018; --body:#4A5540; --muted:#8B947E; --line:#E2E8D4;
-  --moss:#648741; --leaf:#B1E882; --clay:#EA965C;
-}
+:root{__ROOTVARS__}
 html{scroll-behavior:smooth;scroll-padding-top:80px}
 body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:var(--body);background:var(--paper);line-height:1.65;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 .sf{font-family:'Fraunces',Georgia,'Times New Roman',serif}
@@ -514,9 +659,24 @@ section{padding:26px 0 2px;scroll-margin-top:80px}
 .mrow{display:flex;align-items:center;gap:9px;margin-bottom:6px}
 .mrow .num{font-family:'Fraunces',Georgia,serif;font-style:italic;font-weight:600;font-size:14px;color:var(--acc)}
 .mrow .src{font-size:10px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted)}
+.mrow .age{font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--acc)}
 .hero h3{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:24px;line-height:1.22;color:var(--ink);letter-spacing:-.3px}
 .hero h3 a,.row h3 a{color:inherit;text-decoration:none}
 .hero p{font-size:15px;color:var(--body);margin-top:10px}
+.hook{font-family:'Fraunces',Georgia,serif;font-style:italic;font-size:17px;color:var(--ink);line-height:1.5;margin-top:10px}
+.hook.sm{font-size:14px;color:var(--body)}
+.dets{margin:9px 0 0;padding:0 0 0 2px;list-style:none}
+.dets li{font-size:14.5px;color:var(--body);line-height:1.6;padding:3px 0 3px 18px;position:relative}
+.dets li::before{content:"";position:absolute;left:2px;top:.72em;width:6px;height:6px;border-radius:50%;background:var(--acc)}
+.why{background:var(--panel);border-left:3px solid var(--acc);padding:9px 13px;margin-top:12px;font-size:14px;color:var(--body);line-height:1.55}
+.why b{color:var(--acc);font-weight:700}
+.why.sm{font-size:12.5px;padding:7px 11px}
+.mastimg{width:100%;aspect-ratio:4/1;object-fit:cover;display:block;border-radius:14px;margin:0 0 8px}
+.greet{font-family:'Fraunces',Georgia,serif;font-style:italic;font-size:16px;color:var(--body);text-align:center;margin:14px 0 2px}
+.glance{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 18px;margin:14px 0 8px}
+.glance .lbl{font-family:'Fraunces',Georgia,serif;font-style:italic;font-weight:600;font-size:16px;color:var(--moss);margin-bottom:4px}
+.glance a{display:block;font-size:13.5px;color:var(--ink);text-decoration:none;line-height:1.5;padding:5px 0}
+.glance a i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:8px;vertical-align:2px}
 
 .divider{border:0;border-top:1px dashed var(--line);margin:18px 2px}
 
@@ -565,31 +725,36 @@ const spy=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){links
 document.querySelectorAll('section').forEach(s=>spy.observe(s));
 """
 
-_CANOPY_SVG = (
+_MOTIF_CANOPY = (
     '<svg class="canopy" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">'
-    '<path d="M200 20 C150 40 110 80 70 140" stroke="#648741" stroke-width="2" '
+    f'<path d="M200 20 C150 40 110 80 70 140" stroke="{E_ACCENT}" stroke-width="2" '
     'stroke-linecap="round" opacity=".5"/>'
-    '<g fill="#B1E882"><ellipse cx="168" cy="34" rx="15" ry="7" transform="rotate(-32 168 34)"/>'
+    f'<g fill="{E_ACCENT2}"><ellipse cx="168" cy="34" rx="15" ry="7" transform="rotate(-32 168 34)"/>'
     '<ellipse cx="132" cy="62" rx="17" ry="8" transform="rotate(-30 132 62)"/>'
     '<ellipse cx="100" cy="94" rx="15" ry="7" transform="rotate(-34 100 94)"/></g>'
-    '<g fill="#648741" opacity=".55"><ellipse cx="150" cy="48" rx="13" ry="6" transform="rotate(-30 150 48)"/>'
+    f'<g fill="{E_ACCENT}" opacity=".55"><ellipse cx="150" cy="48" rx="13" ry="6" transform="rotate(-30 150 48)"/>'
     '<ellipse cx="84" cy="118" rx="14" ry="6" transform="rotate(-36 84 118)"/></g></svg>'
 )
+
+# Ma is defined by restraint — no corner illustration. The palette, the serif,
+# and the empty space carry it. (Deliberately no motif.)
+_CANOPY_SVG = "" if THEME_NAME == "ma" else _MOTIF_CANOPY
 
 _WEB_TEMPLATE = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>The AI Dispatch</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="__FONTLINK__" rel="stylesheet">
 <style>__CSS__</style></head>
 <body>
 __CANOPY__
 <div class="wrap">
-  <div class="mast reveal"><div class="kick">&#10047; Artificial Intelligence &middot; Grown Daily &#10047;</div><h1>The AI Dispatch</h1><div class="rule"></div><div class="sub">__DATE__ &middot; __TOTAL__ stories &middot; about __READ__ minutes, tea included</div></div>
+  <div class="mast reveal">__BANNERIMG__<div class="kick">__ORN__ Artificial Intelligence &middot; __KICKER__ __ORN__</div><h1>The AI Dispatch</h1><div class="rule"></div><div class="sub">__DATE__ &middot; __TOTAL__ stories &middot; about __READ__ minutes, __SUBTAIL__</div><div class="greet">__GREETING__</div></div>
+  __GLANCE__
   <nav class="nav reveal">__NAV__</nav>
   __BOARD__
   __SECTIONS__
-  <div class="foot"><b>The AI Dispatch</b>Grown fresh every morning at 9:00 IST &middot; from 30+ AI news &amp; research sources &#127807;</div>
+  <div class="foot"><b>The AI Dispatch</b>__FOOTNOTE__</div>
 </div>
 <script>__JS__</script></body></html>"""
 
@@ -632,25 +797,46 @@ def _web_pulse(pulse: dict, total: int, read_min: int) -> str:
             f'<div class="tiles">{tiles_html}</div>{bars_html}{topics_html}</div>')
 
 
+def _web_body(it: dict) -> str:
+    """Hook standfirst → fact bullets → 'Why it matters', with plain fallback."""
+    hook, details, why = it.get("hook"), it.get("details"), it.get("why")
+    parts = []
+    if hook:
+        parts.append(f'<p class="hook">{_he(hook)}</p>')
+    if details:
+        parts.append('<ul class="dets">' +
+                     "".join(f'<li>{_he(d)}</li>' for d in details) + '</ul>')
+    if not hook and not details:
+        parts.append(f'<p>{_he(it.get("summary", ""))}</p>')
+    if why:
+        parts.append(f'<p class="why"><b>Why it matters &rarr;</b> {_he(why)}</p>')
+    return "".join(parts)
+
+
 def _web_story(it: dict, num: int, hero: bool) -> str:
     link = _url(it.get("link", "#"))
     img = (it.get("image") or "").strip()
     has_img = img.lower().startswith(("http://", "https://"))
+    age = _age(it.get("ts"))
+    age_html = f'<span class="age">{age}</span>' if age else ""
     meta = (f'<div class="mrow"><span class="num">No.{num:02d}</span>'
-            f'<span class="src">{_he(it.get("source", ""))}</span></div>')
+            f'<span class="src">{_he(it.get("source", ""))}</span>{age_html}</div>')
     if hero:
         imgtag = f'<img loading="lazy" src="{_url(img)}" alt="">' if has_img else ""
         roles = "".join(f"<span>{_he(r)}</span>" for r in it.get("roles", [])[:4])
         tags = f'<div class="tags">{roles}</div>' if roles else ""
         return (f'<article class="hero reveal">{imgtag}{meta}'
                 f'<h3><a href="{link}" target="_blank" rel="noopener">{_he(it.get("title", ""))}</a></h3>'
-                f'<p>{_he(it.get("summary", ""))}</p>{tags}'
+                f'{_web_body(it)}{tags}'
                 f'<a class="more" href="{link}" target="_blank" rel="noopener">Keep reading &rarr;</a></article>')
     thumb = f'<img loading="lazy" src="{_url(img)}" alt="">' if has_img else ""
     alt = " alt" if num % 2 == 0 else ""
+    blurb = it.get("hook") or it.get("summary", "")
+    why = it.get("why", "")
+    why_html = f'<p class="why sm"><b>Why it matters &rarr;</b> {_he(why)}</p>' if why else ""
     return (f'<article class="row{alt} reveal">{thumb}<div class="tx">{meta}'
             f'<h3><a href="{link}" target="_blank" rel="noopener">{_he(it.get("title", ""))}</a></h3>'
-            f'<p>{_he(it.get("summary", ""))}</p>'
+            f'<p class="hook sm">{_he(blurb)}</p>{why_html}'
             f'<a class="more" href="{link}" target="_blank" rel="noopener">Keep reading &rarr;</a></div></article>')
 
 
@@ -679,9 +865,31 @@ def build_web(digest: dict, pulse: dict | None = None) -> str:
             f'<div class="sec-tag">{tag}</div>'
             f'{stories}</section>')
     today = date.today().strftime("%A, %B %d, %Y")
+    rootvars = (
+        f"--paper:{E_PAPER};--card:{E_CARD};--panel:{E_PANEL};--track:{_T['TRACK']};"
+        f"--ink:{E_INK};--body:{E_BODY};--muted:{E_MUTED};--line:{E_RULE};"
+        f"--moss:{E_ACCENT};--leaf:{E_ACCENT2};--clay:{E_CLAY};")
+    css = (_WEB_CSS.replace("__ROOTVARS__", rootvars)
+                   .replace("'Fraunces'", _T["WEB_SERIF_NAME"]))
+    for a, b in _T.get("WEB_RADII", {}).items():   # quiet the leaf corners per theme
+        css = css.replace(a, b)
+    bannerimg = (f'<img class="mastimg" src="{_T["BANNER"]}" alt="">'
+                 if _T.get("BANNER") else "")
+    glance_rows = "".join(
+        f'<a href="#{_slug(cat)}"><i style="background:{NEON.get(cat, E_ACCENT)}"></i>'
+        f'{_he(items[0].get("hook") or items[0].get("title", ""))}</a>'
+        for cat, items in list(digest.items())[:6] if items)
+    glance = (f'<div class="glance reveal"><div class="lbl">Today at a glance</div>'
+              f'{glance_rows}</div>') if glance_rows else ""
     return (_WEB_TEMPLATE
-            .replace("__CSS__", _WEB_CSS).replace("__JS__", _WEB_JS)
+            .replace("__CSS__", css).replace("__JS__", _WEB_JS)
+            .replace("__FONTLINK__", _T["WEB_FONT_LINK"])
             .replace("__CANOPY__", _CANOPY_SVG)
+            .replace("__BANNERIMG__", bannerimg)
+            .replace("__GREETING__", _T["GREETING"])
+            .replace("__GLANCE__", glance)
+            .replace("__ORN__", _T["ORNAMENT"]).replace("__KICKER__", _T["KICKER"])
+            .replace("__SUBTAIL__", _T["SUBTAIL"]).replace("__FOOTNOTE__", _T["FOOTNOTE"])
             .replace("__BOARD__", _web_pulse(pulse or {}, total, read_min))
             .replace("__NAV__", nav).replace("__SECTIONS__", secs)
             .replace("__DATE__", _he(today))
@@ -767,7 +975,9 @@ def _pdf_image(url: str, width: float, ratio: float = 16 / 9, radius: int = 14,
             return None
         if iw < min_px or ih < min_px * 0.45:   # low-res badge/logo — upscales terribly
             return None
-        if iw / ih > 3 or ih / iw > 3:          # banner ads / skyscrapers, not photos
+        # Reject banner-ad shapes — unless the caller asked for a wide crop
+        # (masthead photo strips legitimately request ratio > 3).
+        if ratio <= 3 and (iw / ih > 3 or ih / iw > 3):
             return None
 
         # Centre-crop to the target aspect ratio.
@@ -815,10 +1025,10 @@ def build_pdf(digest: dict, pulse: dict | None = None) -> bytes:
 
     pulse = pulse or {}
 
-    # ── "Morning Canopy" palette — mirrors the email (E_* vars) ──
-    VOID    = colors.HexColor("#FBFCF6")  # page paper
-    PANEL   = colors.HexColor(E_PANEL)    # tile surfaces
-    TRACK   = colors.HexColor("#E7EEDB")  # chart tracks
+    # ── Palette mirrors the active theme (E_*/_T vars) ──
+    VOID    = colors.HexColor(_T["PDFPAGE"])  # page paper
+    PANEL   = colors.HexColor(E_PANEL)        # tile surfaces
+    TRACK   = colors.HexColor(_T["TRACK"])    # chart tracks
     INK     = colors.HexColor(E_INK)      # deep forest ink
     BODY    = colors.HexColor(E_BODY)     # body copy
     MUTED   = colors.HexColor(E_MUTED)    # labels / captions
@@ -854,6 +1064,13 @@ def build_pdf(digest: dict, pulse: dict | None = None) -> bytes:
     st_rtitle  = mk("rttl", fontSize=12.5, textColor=INK, fontName=SER_B, leading=16, spaceAfter=2)
     st_sum     = mk("sum", fontSize=10.5, textColor=BODY, leading=16.5, spaceBefore=7, spaceAfter=2)
     st_rsum    = mk("rsum", fontSize=9, textColor=BODY, leading=14, spaceBefore=4, spaceAfter=2)
+    st_hook    = mk("hook", fontSize=12, textColor=INK, fontName=SER_I, leading=17, spaceBefore=7)
+    st_rhook   = mk("rhook", fontSize=9.5, textColor=BODY, fontName=SER_I, leading=13.5, spaceBefore=4)
+    st_det     = mk("det", fontSize=10.5, textColor=BODY, leading=15.5, spaceBefore=3,
+                    leftIndent=14, firstLineIndent=-14)
+    st_why     = mk("why", fontSize=10.5, textColor=BODY, leading=15, spaceBefore=9,
+                    leftIndent=10, borderPadding=(6, 8, 6, 8))
+    st_rwhy    = mk("rwhy", fontSize=9, textColor=BODY, leading=13, spaceBefore=4)
     st_roles   = mk("roles", fontSize=9, textColor=MUTED, fontName=SER_I, leading=13, spaceBefore=9)
     st_more    = mk("more", fontSize=9.5, textColor=ACCENT, fontName=SANS_B, leading=13, spaceBefore=8)
     st_rmore   = mk("rmore", fontSize=8.5, textColor=ACCENT, fontName=SANS_B, leading=11, spaceBefore=5)
@@ -867,12 +1084,9 @@ def build_pdf(digest: dict, pulse: dict | None = None) -> bytes:
     # ── Custom dashboard flowables ─────────────────────────────────
 
     class _Tiles(Flowable):
-        """Row of pebble-shaped stat tiles: serif number + soft caption.
-        Radii and baselines vary a little so the row reads organic, not gridded."""
-        PEBBLES = [("#EFF5E2", "#648741", 14, 0),
-                   ("#E9F2EE", "#2E7DB3", 20, 3),
-                   ("#FBF2E2", "#C77F0A", 12, 0),
-                   ("#F2EFF8", "#7B5FC0", 18, 3)]
+        """Row of stat tiles: serif number + soft caption. Per-theme tints,
+        radii and baseline lifts (canopy varies them; ma keeps them calm)."""
+        PEBBLES = [(bg, fg, pr, lift) for (bg, fg, _er, pr, lift) in _T["TILES"]]
 
         def __init__(self, tiles, width, height=2.0 * cm, gap=0.28 * cm):
             super().__init__()
@@ -1009,42 +1223,44 @@ def build_pdf(digest: dict, pulse: dict | None = None) -> bytes:
         c.drawPath(p, stroke=0, fill=1)
         c.restoreState()
 
-    # Soft paper page with a hand-drawn branch in the top-right corner and a
-    # few seeds bottom-left — quiet nature, no grids, no strips.
-    def paint_page(canvas, doc):
-        W, H = A4
-        canvas.saveState()
-        canvas.setFillColor(VOID)
-        canvas.rect(0, 0, W, H, fill=1, stroke=0)
-
-        # branch stem arcing out of the top-right corner
-        canvas.setStrokeColor(ACCENT)
+    def _alpha(canvas, kind, a):
         try:
-            canvas.setStrokeAlpha(0.30)
+            (canvas.setFillAlpha if kind == "fill" else canvas.setStrokeAlpha)(a)
         except Exception:
             pass
+
+    def _paint_canopy(canvas, W, H):
+        # hand-drawn branch top-right + a few seeds bottom-left
+        canvas.setStrokeColor(ACCENT)
+        _alpha(canvas, "stroke", 0.30)
         canvas.setLineWidth(1.0)
         p = canvas.beginPath()
         p.moveTo(W - 3, H - 64)
         p.curveTo(W - 30, H - 52, W - 52, H - 32, W - 78, H - 10)
         canvas.drawPath(p, stroke=1, fill=0)
-
-        leaves = [(W - 16, H - 58, 12, 205, ACCENT2, 0.55),
-                  (W - 35, H - 45, 14, 220, ACCENT, 0.28),
-                  (W - 50, H - 34, 11, 200, ACCENT2, 0.50),
-                  (W - 66, H - 20, 13, 235, ACCENT, 0.25),
-                  (W - 76, H - 12, 10, 210, ACCENT2, 0.45)]
-        for lx, ly, sz, ang, col, al in leaves:
+        for lx, ly, sz, ang, col, al in (
+                (W - 16, H - 58, 12, 205, ACCENT2, 0.55),
+                (W - 35, H - 45, 14, 220, ACCENT, 0.28),
+                (W - 50, H - 34, 11, 200, ACCENT2, 0.50),
+                (W - 66, H - 20, 13, 235, ACCENT, 0.25),
+                (W - 76, H - 12, 10, 210, ACCENT2, 0.45)):
             _draw_leaf(canvas, lx, ly, sz, ang, col, al)
-
-        # three seeds resting bottom-left
-        try:
-            canvas.setFillAlpha(0.30)
-        except Exception:
-            pass
+        _alpha(canvas, "fill", 0.30)
         canvas.setFillColor(ACCENT)
         for sx, sy, r in ((26, 30, 2.4), (37, 24, 1.7), (31, 40, 1.3)):
             canvas.circle(sx, sy, r, stroke=0, fill=1)
+
+    def _paint_ma(canvas, W, H):
+        # Restraint is the point — clean paper, nothing drawn. The palette,
+        # the serif and the whitespace carry Ma. No corner illustration.
+        return
+
+    def paint_page(canvas, doc):
+        W, H = A4
+        canvas.saveState()
+        canvas.setFillColor(VOID)
+        canvas.rect(0, 0, W, H, fill=1, stroke=0)
+        (_paint_ma if THEME_NAME == "ma" else _paint_canopy)(canvas, W, H)
         canvas.restoreState()
 
     buf = io.BytesIO()
@@ -1060,10 +1276,16 @@ def build_pdf(digest: dict, pulse: dict | None = None) -> bytes:
     read_min = max(2, round(total * 0.4))
     today = date.today().strftime("%A, %B %d, %Y").upper()
 
-    # ── Page 1: masthead + Morning Pulse dashboard ─────────────────
-    story.append(Spacer(1, 0.35 * cm))
-    story.append(Paragraph("&#9679; &nbsp;ARTIFICIAL INTELLIGENCE &middot; GROWN DAILY&nbsp; &#9679;",
-                           st_kicker))
+    # ── Page 1: real-photo banner, masthead, Morning Pulse ─────────
+    banner = _pdf_image(_T.get("BANNER", ""), CONTENT_W, ratio=4.2, radius=12)
+    if banner is not None:
+        story.append(banner)
+        story.append(Spacer(1, 0.45 * cm))
+    else:
+        story.append(Spacer(1, 0.35 * cm))
+    story.append(Paragraph(
+        f"&#9679; &nbsp;ARTIFICIAL INTELLIGENCE &middot; {_safe(_T['KICKER']).upper()}&nbsp; &#9679;",
+        st_kicker))
     story.append(Paragraph("The AI Dispatch", st_mast))
     story.append(Spacer(1, 0.22 * cm))
     story.append(HRFlowable(width="34%", thickness=2.2, color=ACCENT2, spaceAfter=2.5,
@@ -1072,8 +1294,10 @@ def build_pdf(digest: dict, pulse: dict | None = None) -> bytes:
                             hAlign="CENTER"))
     story.append(Paragraph(
         f"{_safe(today.title())} &nbsp;&middot;&nbsp; {total} stories "
-        f"&nbsp;&middot;&nbsp; about {read_min} minutes, tea included",
+        f"&nbsp;&middot;&nbsp; about {read_min} minutes, {_safe(_T['SUBTAIL'])}",
         st_subline))
+    story.append(Spacer(1, 0.2 * cm))
+    story.append(Paragraph(_safe(_T["GREETING"]), st_subline))
     story.append(Spacer(1, 0.5 * cm))
 
     if pulse:
@@ -1127,20 +1351,37 @@ def build_pdf(digest: dict, pulse: dict | None = None) -> bytes:
         sec_intro.append(Spacer(1, 0.35 * cm))
 
         for i, it in enumerate(items, 1):
+            age = _age(it.get("ts"))
+            age_html = (f'&nbsp;&nbsp;<font color="{accent_hex}" size="8">{age.upper()}</font>'
+                        if age else "")
             meta = Paragraph(
                 f'<font color="{accent_hex}" name="{SER_BI}" size="11">No.{i:02d}</font>'
-                f'&nbsp;&nbsp;&nbsp;{_safe(it.get("source", "")).upper()}', st_src)
-            link_p_style, title_style, sum_style = st_more, st_title, st_sum
+                f'&nbsp;&nbsp;&nbsp;{_safe(it.get("source", "")).upper()}{age_html}', st_src)
+            link_p_style, title_style = st_more, st_title
+
+            hook, details, why = it.get("hook"), it.get("details"), it.get("why")
 
             if i == 1:
-                # Hero: full-width 16:9 image, big headline.
+                # Hero: full-width 16:9 image, headline, hook, bullets, why.
                 block = []
                 img = _pdf_image(it.get("image", ""), CONTENT_W, ratio=16 / 9)
                 if img is not None:
                     block.append(img)
                     block.append(Spacer(1, 0.3 * cm))
-                block += [meta, Paragraph(_safe(it.get("title", "")), title_style),
-                          Paragraph(_safe(it.get("summary", "")), sum_style)]
+                block += [meta, Paragraph(_safe(it.get("title", "")), title_style)]
+                if hook:
+                    block.append(Paragraph(_safe(hook), st_hook))
+                if details:
+                    for d in details:
+                        block.append(Paragraph(
+                            f'<font color="{accent_hex}"><b>&bull;</b></font>&nbsp; {_safe(d)}',
+                            st_det))
+                if not hook and not details:
+                    block.append(Paragraph(_safe(it.get("summary", "")), st_sum))
+                if why:
+                    block.append(Paragraph(
+                        f'<font color="{accent_hex}"><b>Why it matters &rarr;</b></font> '
+                        f'{_safe(why)}', st_why))
                 rl = roles_line(it.get("roles", []), accent_hex)
                 if rl is not None:
                     block.append(rl)
@@ -1149,13 +1390,18 @@ def build_pdf(digest: dict, pulse: dict | None = None) -> bytes:
                     f'Keep reading &rarr;</link>', link_p_style))
                 story.append(KeepTogether(sec_intro + block))
             else:
-                # Compact row: uniform 16:9 thumbnail left, text right.
+                # Compact row: uniform 16:9 thumbnail, hook as the one-liner.
+                blurb = hook or it.get("summary", "")
                 text_cell = [meta,
                              Paragraph(_safe(it.get("title", "")), st_rtitle),
-                             Paragraph(_safe(it.get("summary", "")), st_rsum),
-                             Paragraph(
-                                 f'<link href="{_safe_url(it.get("link", "#"))}" '
-                                 f'color="{E_ACCENT}">Keep reading &rarr;</link>', st_rmore)]
+                             Paragraph(_safe(blurb), st_rhook)]
+                if why:
+                    text_cell.append(Paragraph(
+                        f'<font color="{accent_hex}"><b>Why it matters &rarr;</b></font> '
+                        f'{_safe(why)}', st_rwhy))
+                text_cell.append(Paragraph(
+                    f'<link href="{_safe_url(it.get("link", "#"))}" '
+                    f'color="{E_ACCENT}">Keep reading &rarr;</link>', st_rmore))
                 thumb = _pdf_image(it.get("image", ""), THUMB_W, ratio=16 / 9,
                                    radius=8, min_px=220)
                 if thumb is not None:
@@ -1191,9 +1437,7 @@ def build_pdf(digest: dict, pulse: dict | None = None) -> bytes:
                             hAlign="CENTER"))
     story.append(Paragraph("The AI Dispatch", st_foot_b))
     story.append(Spacer(1, 0.12 * cm))
-    story.append(Paragraph(
-        "Grown fresh every morning at 9:00 IST &nbsp;&middot;&nbsp; "
-        "from 30+ AI news &amp; research sources", st_foot))
+    story.append(Paragraph(_T["FOOTNOTE"], st_foot))
 
     doc.build(story, onFirstPage=paint_page, onLaterPages=paint_page)
     return buf.getvalue()
