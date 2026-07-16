@@ -600,8 +600,9 @@ a{-webkit-tap-highlight-color:transparent}
 .nav a{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--ink);text-decoration:none;padding:8px 13px;border-radius:11px 3px 11px 3px;white-space:nowrap;transition:.2s}
 .nav a .cdot{width:8px;height:8px;border-radius:50%;background:var(--acc,#648741);flex:none}
 .nav a span{color:var(--muted)}
-.nav a.active{background:var(--moss);color:#fff}
-.nav a.active span,.nav a.active .cdot{color:#fff;background:#fff}
+.nav a.active{color:var(--acc);background:transparent;border-bottom:3px solid var(--acc)}
+.nav a.active .cdot{transform:scale(1.25)}
+.nav a.active span{color:var(--acc)}
 
 /* pulse dashboard */
 .pulse{background:var(--panel);border:1px solid var(--line);border-radius:24px 8px 24px 8px;padding:18px 16px;margin:6px 0 10px}
