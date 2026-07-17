@@ -369,8 +369,9 @@ def _section(category: str, items: list, first: bool = False) -> str:
     for i, it in enumerate(items, 1):
         if i > 1:
             parts.append(_dashed_rule())
-        parts.append(_article_hero(it, i, accent, lead=(first and i == 1)) if i == 1
-                     else _article_row(it, i, accent))
+        parts.append(_article_row(it, i, accent))
+
+
     stories = "".join(parts)
     return f"""
     <a name="{anchor}" id="{anchor}"></a>
@@ -818,7 +819,7 @@ def build_web(digest: dict, pulse: dict | None = None) -> str:
         for i, it in enumerate(items, 1):
             if i > 1:
                 stories += '<hr class="divider">'
-            stories += _web_story(it, i, hero=(i == 1))
+            stories += _web_story(it, i, hero=False)
         secs += (
             f'<section id="{_slug(c)}" style="--acc:{acc}">'
             f'<header class="sec-h reveal"><span class="chip">&#9679; {lbl}</span>'
