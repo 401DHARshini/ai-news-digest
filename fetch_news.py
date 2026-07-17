@@ -219,11 +219,15 @@ def tag_roles(text: str) -> list:
 # ---------------------------------------------------------------------
 
 def clean_text(raw: str) -> str:
-    """Strip HTML tags / entities, collapse whitespace."""
+    """Strip HTML tags / entities, collapse whitespace, remove arXiv boilerplate."""
     text = re.sub(r"<[^>]+>", "", raw or "")
     text = html.unescape(text)
     text = re.sub(r"\s+", " ", text).strip()
-    return text
+    # Strip arXiv raw prefix: "arXiv:2607.12345v1 Announce Type: new Abstract:"
+    text = re.sub(r"^arXiv:\S+\s+Announce Type:\s*\S+\s+Abstract:\s*", "", text, flags=re.IGNORECASE)
+    # Also strip just "Abstract:" if it starts with it
+    text = re.sub(r"^Abstract:\s*", "", text, flags=re.IGNORECASE)
+    return text.strip()
 
 
 def crisp_summary(title: str, summary: str, max_chars: int = 340) -> str:
