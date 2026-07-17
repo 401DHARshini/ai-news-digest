@@ -622,11 +622,11 @@ a{-webkit-tap-highlight-color:transparent}
 .topics span b{font-family:'Fraunces',Georgia,serif}
 
 /* sections + stories */
-section{padding:26px 0 2px;scroll-margin-top:80px}
-.sec-h{display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
-.sec-h .chip{font-size:12.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--acc)}
-.sec-h .cnt{margin-left:auto;font-family:'Fraunces',Georgia,serif;font-style:italic;font-size:12.5px;color:var(--muted);white-space:nowrap}
-.sec-tag{font-family:'Fraunces',Georgia,serif;font-style:italic;font-size:14px;color:var(--muted);margin:2px 0 18px;border-top:1px dashed var(--line);padding-top:10px}
+section{padding:32px 0 2px;scroll-margin-top:80px}
+.sec-h{display:flex;align-items:center;gap:12px;margin-bottom:6px;padding:10px 16px;background:var(--panel);border-left:4px solid var(--acc);border-radius:0 8px 8px 0}
+.sec-h .chip{font-size:13px;font-weight:900;letter-spacing:.9px;text-transform:uppercase;color:var(--acc)}
+.sec-h .cnt{margin-left:auto;font-family:'Fraunces',Georgia,serif;font-style:italic;font-size:12px;color:var(--muted);white-space:nowrap;background:var(--bg);padding:2px 10px;border-radius:20px;border:1px solid var(--line)}
+.sec-tag{font-family:'Fraunces',Georgia,serif;font-style:italic;font-size:13.5px;color:var(--muted);margin:8px 0 18px;padding-left:20px}
 
 .hero{margin:0 0 18px}
 .hero img{width:100%;height:auto;display:block;aspect-ratio:16/9;object-fit:cover;border-radius:20px 20px 20px 6px;margin-bottom:13px}
