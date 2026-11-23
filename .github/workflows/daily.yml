@@ -47,7 +47,7 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
           THEME: ${{ vars.THEME }}   # "canopy" (default) or "ma"
-        run: python send_digest.py
+        run: python -u send_digest.py   # -u: unbuffered, so logs stream live
 
       - name: Upload web edition for Pages
         uses: actions/upload-pages-artifact@v3

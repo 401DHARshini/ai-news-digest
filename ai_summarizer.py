@@ -168,6 +168,7 @@ def _parse(content: str) -> dict | None:
 # Models that answered 404/410 (retired or renamed) this run — skipped for the
 # remaining stories instead of failing once per story.
 _DEAD_MODELS: set = set()
+_BAD_OUTPUT: dict = {}
 
 
 def ai_enrich(title: str, raw_summary: str) -> dict | None:
@@ -181,9 +182,21 @@ def ai_enrich(title: str, raw_summary: str) -> dict | None:
             result = _parse(_call(provider, model, title, raw_summary or title))
             if result:
                 return result
+            # Answered, but not usable JSON (e.g. a reasoning model spent its
+            # token budget thinking). Two strikes and it's skipped this run.
+            key = (provider, model)
+            _BAD_OUTPUT[key] = _BAD_OUTPUT.get(key, 0) + 1
+            if _BAD_OUTPUT[key] >= 2:
+                _DEAD_MODELS.add(key)
+                print(f"[ai] {provider}:{model} keeps returning unusable output — skipping it")
         except Exception as e:
             status = getattr(getattr(e, "response", None), "status_code", None)
-            if status in (404, 410):
+            if isinstance(e, (requests.Timeout, requests.ConnectionError)):
+                # A model too slow once will be slow for every story — don't let it
+                # add 30s per story to the run.
+                _DEAD_MODELS.add((provider, model))
+                print(f"[ai] {provider}:{model} timed out — skipping it for the rest of this run")
+            elif status in (404, 410):
                 _DEAD_MODELS.add((provider, model))
                 print(f"[ai] {provider}:{model} is retired/unavailable ({status}) — "
                       "skipping it for the rest of this run; update MODEL_CHAIN")

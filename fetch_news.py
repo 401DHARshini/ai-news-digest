@@ -525,6 +525,9 @@ def dedupe(items):
 # 5. MAIN COLLECT FUNCTION
 # ---------------------------------------------------------------------
 
+AI_BUDGET_SECONDS = 240   # cap on total LLM time so a slow provider can't delay the email
+
+
 def enrich_digest(digest: dict) -> None:
     """Rewrite each final story's summary (and role tags) with a free LLM, in place.
 
@@ -534,10 +537,16 @@ def enrich_digest(digest: dict) -> None:
     """
     total = sum(len(v) for v in digest.values())
     powered = 0
+    deadline = time.time() + AI_BUDGET_SECONDS
     for items in digest.values():
         for it in items:
             if it.get("tracked"):
                 continue
+            if time.time() > deadline:
+                print(f"[ai] time budget ({AI_BUDGET_SECONDS}s) used up — "
+                      "remaining stories keep their keyword summary")
+                print(f"[ai] enriched {powered}/{total} stories with an LLM summary")
+                return
             res = ai_enrich(it["title"], it.get("summary", ""))
             if res:
                 it["summary"] = res["summary"]
