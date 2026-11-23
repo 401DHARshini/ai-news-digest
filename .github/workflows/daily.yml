@@ -54,6 +54,24 @@ jobs:
         with:
           path: public
 
+  # GitHub auto-disables scheduled workflows after 60 days without a commit.
+  # Re-enabling via the API on every run resets that timer, so the daily
+  # email keeps arriving even if the repo goes untouched for months.
+  keepalive:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    continue-on-error: true
+    steps:
+      - name: Keep scheduled workflow enabled
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -sf -X PUT \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/daily.yml/enable"
+
   # Publishes the web edition. Requires Pages enabled (Settings -> Pages ->
   # Source: GitHub Actions). If Pages isn't enabled yet, only this job fails —
   # the email above still sends fine.
