@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A serverless daily AI-news digest bot. It scrapes AI news from ~28 RSS feeds + optional NewsAPI, categorizes and role-tags each story, then emails a styled HTML digest with a PDF attachment via Gmail SMTP. It runs entirely on GitHub Actions cron — no server, no database.
+A serverless daily AI-news digest bot. It scrapes AI news from ~40 RSS feeds (vendor blogs + Google News search feeds that catch announcements from any company) + optional NewsAPI, categorizes and role-tags each story, then emails a styled HTML digest with a PDF attachment via Gmail SMTP. It runs entirely on GitHub Actions cron — no server, no database.
 
 ## Commands
 

@@ -9,8 +9,14 @@ import re
 import html
 import time
 import calendar
+import socket
 import feedparser
 import requests
+
+# feedparser has no timeout of its own; one hung feed must not stall the run.
+socket.setdefaulttimeout(20)
+# Some publishers (e.g. blogs.oracle.com) reject feedparser's default agent.
+feedparser.USER_AGENT = "Mozilla/5.0 ai-news-digest"
 from datetime import datetime, timedelta, timezone
 
 # AI enrichment via HuggingFace (used only when HF_TOKEN is set)
@@ -24,51 +30,69 @@ except ImportError:
 # 1. SOURCES
 # ---------------------------------------------------------------------
 
+# Google News search feeds catch announcements from ANY company (Zoho, Cloudflare,
+# Oracle, ...) even when that company has no RSS feed of its own.
+def _gnews(query: str) -> str:
+    from urllib.parse import quote_plus
+    return ("https://news.google.com/rss/search?q=" + quote_plus(query)
+            + "&hl=en-US&gl=US&ceid=US:en")
+
+
 RSS_FEEDS = [
     # ── Tech News ──────────────────────────────────────────────────
     "https://techcrunch.com/category/artificial-intelligence/feed/",
     "https://venturebeat.com/category/ai/feed/",
-    "https://www.theverge.com/ai-artificial-intelligence/rss/index.xml",
-    "https://www.artificialintelligence-news.com/feed/",
-    "https://www.wired.com/feed/tag/artificial-intelligence/rss",
-    "https://thenextweb.com/neural/feed/",
+    "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
+    "https://www.wired.com/feed/tag/ai/latest/rss",
     "https://www.zdnet.com/topic/artificial-intelligence/rss.xml",
-    "https://www.businessinsider.com/sai/feed",
+    "https://www.technologyreview.com/feed/",
 
     # ── Research / Papers ──────────────────────────────────────────
     "https://arxiv.org/rss/cs.AI",
     "https://arxiv.org/rss/cs.LG",       # machine learning
     "https://arxiv.org/rss/cs.CL",       # NLP / LLMs
-    "https://www.technologyreview.com/feed/",
-    "https://paperswithcode.com/latest.rss",
 
-    # ── Company Blogs (model launches live here) ───────────────────
-    "https://openai.com/blog/rss.xml",
-    "https://www.anthropic.com/rss.xml",
+    # ── AI Labs (model launches live here) ─────────────────────────
+    "https://openai.com/news/rss.xml",
     "https://blog.google/technology/ai/rss/",
-    "https://ai.googleblog.com/feeds/posts/default",
     "https://deepmind.google/blog/rss.xml",
-    "https://huggingface.co/blog/feed.xml",          # model releases
-    "https://mistral.ai/feed.rss",
-    "https://blogs.microsoft.com/ai/feed/",
-    "https://ai.meta.com/blog/rss/",
-    "https://stability.ai/news/rss.xml",
-    "https://cohere.com/blog/rss",
-    "https://www.nvidia.com/en-us/about-nvidia/blogs/feed/",
+    "https://huggingface.co/blog/feed.xml",
+    "https://developers.googleblog.com/feeds/posts/default",
+
+    # ── Big Tech / Enterprise platforms ────────────────────────────
+    "https://www.microsoft.com/en-us/microsoft-365/blog/feed/",   # Copilot, Work IQ
+    "https://devblogs.microsoft.com/foundry/feed/",               # Azure AI Foundry, agents
+    "https://azure.microsoft.com/en-us/blog/tag/ai/feed/",
+    "https://blog.cloudflare.com/rss/",                           # Workers AI, MCP, Code Mode
+    "https://blogs.oracle.com/ai-and-datascience/rss",
+    "https://blogs.oracle.com/cloud-infrastructure/rss",
+    "https://blogs.oracle.com/database/rss",
+    "https://www.salesforce.com/news/feed/",                      # Agentforce
+    "https://blog.zoho.com/feed",                                 # Zia, Zoho AI
+    "https://blogs.nvidia.com/feed/",
+    "https://developer.nvidia.com/blog/feed/",
 
     # ── Developer / Engineering Focus ──────────────────────────────
-    "https://github.blog/category/ai-ml/feed/",
+    "https://github.blog/feed/",
     "https://aws.amazon.com/blogs/machine-learning/feed/",
-    "https://azure.microsoft.com/en-us/blog/tag/ai/feed/",
-    "https://cloud.google.com/blog/products/ai-machine-learning/rss",
+    "https://cloudblog.withgoogle.com/products/ai-machine-learning/rss/",
+    "https://www.linuxfoundation.org/blog/rss.xml",               # A2A, MCP, AAIF
+    "https://simonwillison.net/atom/everything/",                 # sharp daily AI-dev notes
+    "https://www.latent.space/feed",                              # AI engineering deep dives
 
     # ── Cloud / Data / Platform AI ─────────────────────────────────
-    "https://www.databricks.com/blog/feed",
-    "https://www.snowflake.com/en/blog/feed/",
+    "https://www.databricks.com/feed",
+    "https://www.snowflake.com/feed/",
     "https://aws.amazon.com/blogs/big-data/feed/",
-    "https://developer.nvidia.com/blog/feed/",
-    "https://blog.langchain.dev/rss/",
-    "https://www.pinecone.io/learn/rss.xml",
+
+    # ── Industry-wide catch-all (Google News search) ───────────────
+    # Kept last so a company's own blog post wins de-duplication.
+    _gnews('Anthropic OR Claude when:2d'),
+    _gnews('OpenAI OR ChatGPT when:2d'),
+    _gnews('"MCP" OR "Model Context Protocol" OR "A2A" OR "agent-to-agent" when:3d'),
+    _gnews('"AI agents" OR "agentic AI" when:2d'),
+    _gnews('(Microsoft Copilot OR "Work IQ" OR Google Gemini OR AWS Bedrock) when:2d'),
+    _gnews('(Cloudflare OR Oracle OR Zoho OR Salesforce OR ServiceNow OR SAP) AI when:2d'),
 ]
 
 NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "")  # optional, free tier key
@@ -79,6 +103,10 @@ AI_KEYWORDS = [
     "large language model", "neural network", "openai", "anthropic",
     "claude", "chatgpt", "gemini", "deepmind", "generative ai",
     "agentic", "transformer model", "foundation model",
+    # agent / protocol / platform terms that often appear without the word "AI"
+    "mcp", "model context protocol", "a2a", "agent2agent", "agent-to-agent",
+    "ai agent", "agents", "copilot", "work iq", "code mode", "agentforce",
+    "workers ai", "inference", "gpt", "llama", "rag ", "vector search",
 ]
 
 LOOKBACK_HOURS = 26  # slightly over 24h so a daily cron never misses items
@@ -110,7 +138,9 @@ CATEGORY_RULES = {
         "sdk", "coding assistant", "code assistant", "copilot", "github copilot",
         "cursor", "windsurf", "devin", "agent framework", "agentic framework",
         "langchain", "llamaindex", "llama index", "autogen", "crewai", "cli tool",
-        "developer tool", "function calling", "mcp ", "model context protocol",
+        "developer tool", "function calling", "mcp ", "mcp)", "mcp,", "mcp server",
+        "model context protocol", "a2a", "agent2agent", "agent-to-agent",
+        "ai agent", "code mode", "work iq", "agentforce", "agents sdk", "workers ai",
         "open source library", "new api", "new sdk", "plugin", "ide ",
     ],
     "🤖 Model Updates": [
@@ -308,8 +338,17 @@ def fetch_rss_items():
         try:
             feed = feedparser.parse(feed_url)
             source_name = feed.feed.get("title", feed_url)
+            is_gnews = "news.google.com" in feed_url
+            if not feed.entries:
+                print(f"[warn] no entries from {feed_url}")
             for entry in feed.entries[:25]:
                 title = clean_text(entry.get("title", ""))
+                item_source = source_name
+                if is_gnews:
+                    # Google News titles look like "Headline - Publisher"
+                    item_source = (entry.get("source") or {}).get("title") or "Google News"
+                    if title.endswith(" - " + item_source):
+                        title = title[: -len(" - " + item_source)].strip()
                 summary = clean_text(entry.get("summary", entry.get("description", "")))
                 link = entry.get("link", "")
                 published_struct = entry.get("published_parsed") or entry.get("updated_parsed")
@@ -328,7 +367,7 @@ def fetch_rss_items():
                     "title": title,
                     "summary": crisp_summary(title, summary),
                     "link": link,
-                    "source": source_name,
+                    "source": item_source,
                     "image": extract_image(entry),
                     "category": categorize(combined),
                     "roles": tag_roles(combined),
