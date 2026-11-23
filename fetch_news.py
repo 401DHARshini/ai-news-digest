@@ -95,6 +95,62 @@ RSS_FEEDS = [
     _gnews('(Cloudflare OR Oracle OR Zoho OR Salesforce OR ServiceNow OR SAP) AI when:2d'),
 ]
 
+# ---------------------------------------------------------------------
+# 1b. EDITORIAL PRIORITY — what an IT leader AND a junior engineer need
+# ---------------------------------------------------------------------
+# Companies / topics that move the industry. Stories naming one rank higher,
+# and Google News stories MUST name one (keeps out tiny-startup press releases).
+WATCHLIST = [
+    "openai", "chatgpt", "anthropic", "claude", "google", "gemini", "deepmind",
+    "microsoft", "copilot", "azure", "work iq", "aws", "amazon", "bedrock",
+    "meta", "llama", "nvidia", "apple", "oracle", "cloudflare", "salesforce",
+    "agentforce", "zoho", "servicenow", "sap", "ibm", "databricks", "snowflake",
+    "github", "hugging face", "mistral", "deepseek", "qwen", "xai", "grok",
+    "mcp", "model context protocol", "a2a", "agent2agent", "linux foundation",
+]
+WATCH_RE = re.compile(r"\b(" + "|".join(re.escape(w) for w in WATCHLIST) + r")\b", re.I)
+
+# Established tech/business press — trusted reporting outranks aggregators.
+TOP_PRESS = [
+    "techcrunch", "the verge", "wired", "technology review", "zdnet", "venturebeat",
+    "reuters", "bloomberg", "the information", "cnbc", "financial times", "wsj",
+    "wall street journal", "axios", "ars technica", "the register", "infoworld",
+    "computerworld", "geekwire", "siliconangle", "new york times", "the economist",
+]
+
+# Paid press-release wires and low-signal aggregators: dropped from Google News.
+LOW_VALUE_SOURCES = [
+    "ein news", "ein presswire", "einpresswire", "pr newswire", "prnewswire", "globenewswire",
+    "business wire", "accesswire", "openpr", "newsfile", "citybiz", "cointribune",
+    "biggo", "startup fortune",
+    # stock-picking / investor sites: market chatter, not technology news
+    "motley fool", "fool.com", "seeking alpha", "benzinga", "zacks", "investorplace",
+    "marketbeat", "investing.com", "simply wall", "tipranks", "insidermonkey", "insider monkey",
+]
+
+# Share-price chatter ("XYZ stock holds $242 ...") — not technology news.
+STOCK_RE = re.compile(r"\b(stock|shares|price target)\b.*\$|\$\d.*\b(stock|shares)\b", re.I)
+
+MAX_PER_COMPANY = 3  # stops one hot topic (e.g. an IPO) filling the whole email
+MAX_PER_SOURCE = 3    # stops one prolific blog filling the whole email
+
+ARXIV_MAX = 2   # research papers per digest — enough for the curious, not a flood
+
+
+def importance(it: dict) -> int:
+    """Editorial score: official/trusted sources and industry-moving names first."""
+    origin = it.get("origin", "")
+    src = (it.get("source") or "").lower()
+    score = {"arxiv": 0, "gnews": 1, "feed": 2}.get(origin, 1)
+    if it.get("tracked"):
+        score += 3
+    if any(p in src for p in TOP_PRESS):
+        score += 1
+    if origin != "arxiv" and WATCH_RE.search(it.get("title", "")):
+        score += 2
+    return score
+
+
 NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "")  # optional, free tier key
 NEWSAPI_URL = "https://newsapi.org/v2/everything"
 
@@ -339,6 +395,7 @@ def fetch_rss_items():
             feed = feedparser.parse(feed_url)
             source_name = feed.feed.get("title", feed_url)
             is_gnews = "news.google.com" in feed_url
+            is_arxiv = "arxiv" in feed_url
             if not feed.entries:
                 print(f"[warn] no entries from {feed_url}")
             for entry in feed.entries[:25]:
@@ -349,6 +406,10 @@ def fetch_rss_items():
                     item_source = (entry.get("source") or {}).get("title") or "Google News"
                     if title.endswith(" - " + item_source):
                         title = title[: -len(" - " + item_source)].strip()
+                    if (not WATCH_RE.search(title)
+                            or any(b in item_source.lower() for b in LOW_VALUE_SOURCES)
+                            or STOCK_RE.search(title)):
+                        continue
                 summary = clean_text(entry.get("summary", entry.get("description", "")))
                 link = entry.get("link", "")
                 published_struct = entry.get("published_parsed") or entry.get("updated_parsed")
@@ -357,7 +418,7 @@ def fetch_rss_items():
                 # daily window ("fresh") are eligible for the digest itself.
                 if not within_lookback(published_struct, INSIGHT_LOOKBACK_HOURS):
                     continue
-                if "arxiv" not in feed_url and not is_ai_related(f"{title} {summary}"):
+                if not is_arxiv and not is_ai_related(f"{title} {summary}"):
                     continue
                 if not title or not link:
                     continue
@@ -369,7 +430,9 @@ def fetch_rss_items():
                     "link": link,
                     "source": item_source,
                     "image": extract_image(entry),
-                    "category": categorize(combined),
+                    # Papers always live in Research so they never crowd out industry news.
+                    "category": "🔬 R&D / Research" if is_arxiv else categorize(combined),
+                    "origin": "arxiv" if is_arxiv else ("gnews" if is_gnews else "feed"),
                     "roles": tag_roles(combined),
                     "ai_powered": False,
                     "fresh": within_lookback(published_struct),
@@ -428,14 +491,32 @@ def fetch_newsapi_items():
     return items
 
 
+_STOP = {"the", "a", "an", "and", "or", "of", "for", "to", "in", "on", "with",
+         "its", "is", "at", "by", "from", "as", "new", "how", "why", "what", "s"}
+
+
+def _title_words(title: str) -> set:
+    return {w for w in re.findall(r"[a-z0-9]+", title.lower()) if w not in _STOP}
+
+
 def dedupe(items):
+    """Drop repeats: same title prefix, or the same story under a reworded
+    headline (most of the shorter headline's words appear in a kept one).
+    First occurrence wins, and feeds are ordered so official sources come first."""
     seen = set()
+    kept_words = []
     unique = []
     for it in items:
         key = re.sub(r"\W+", "", it["title"].lower())[:60]
         if key in seen:
             continue
+        words = _title_words(it["title"])
+        if len(words) >= 5 and any(
+                len(words & kw) / min(len(words), len(kw)) >= 0.6
+                for kw in kept_words if len(kw) >= 5):
+            continue
         seen.add(key)
+        kept_words.append(words)
         unique.append(it)
     return unique
 
@@ -470,7 +551,7 @@ def enrich_digest(digest: dict) -> None:
     print(f"[ai] enriched {powered}/{total} stories with an LLM summary")
 
 
-def collect_digest(max_per_category: int = 5, with_insights: bool = False):
+def collect_digest(max_per_category: int = 4, with_insights: bool = False):
     """Collect the trimmed digest; with_insights=True also returns the
     dashboard signals mined from EVERY scanned article (see insights.py),
     as a (digest, insights) tuple."""
@@ -492,28 +573,51 @@ def collect_digest(max_per_category: int = 5, with_insights: bool = False):
     for it in all_items:
         if it.get("fresh", True):
             grouped.setdefault(it["category"], []).append(it)
-    # Newest first inside every category — the digest leads with what just broke.
+    # Most important first inside every category (then newest), so the lead story,
+    # "Today at a glance" and the email subject all carry what actually matters.
     for items in grouped.values():
-        items.sort(key=lambda it: it.get("ts") or 0, reverse=True)
+        items.sort(key=lambda it: (importance(it), it.get("ts") or 0), reverse=True)
 
-    # category display order — model updates first, awareness last
+    # Display order: what changed and what to act on first, research and
+    # background reading last.
     order = [
         "🤖 Model Updates",
+        "🚀 New Launch / Feature",
+        "🛠️ Dev Tools & Agents",
         "☁️ Cloud AI",
         "🗄️ Data & Databricks",
-        "🛠️ Dev Tools & Agents",
-        "🧪 Testing & Evals",
-        "🚀 New Launch / Feature",
-        "🔬 R&D / Research",
-        "✅ Good News / Wins",
         "⚠️ Bad News / Risk",
+        "✅ Good News / Wins",
+        "🧪 Testing & Evals",
+        "🔬 R&D / Research",
         "💡 AI Awareness / Must Know",
         "📰 General AI Update",
     ]
     final = {}
+    arxiv_left = ARXIV_MAX
+    per_company, per_source = {}, {}
     for cat in order:
-        if cat in grouped:
-            final[cat] = grouped[cat][:max_per_category]
+        picked = []
+        for it in grouped.get(cat, []):
+            if len(picked) >= max_per_category:
+                break
+            src = (it.get("source") or "").lower()
+            if it.get("origin") != "arxiv" and per_source.get(src, 0) >= MAX_PER_SOURCE:
+                continue
+            if it.get("origin") == "arxiv":
+                if arxiv_left <= 0:
+                    continue
+                arxiv_left -= 1
+            m = WATCH_RE.search(it.get("title", ""))
+            if m:
+                company = m.group(1).lower()
+                if per_company.get(company, 0) >= MAX_PER_COMPANY:
+                    continue
+                per_company[company] = per_company.get(company, 0) + 1
+            per_source[src] = per_source.get(src, 0) + 1
+            picked.append(it)
+        if picked:
+            final[cat] = picked
 
     if AI_ENABLED:
         print("Enriching summaries with AI (free multi-model fallback)...")

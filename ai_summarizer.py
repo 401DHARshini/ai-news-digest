@@ -71,14 +71,18 @@ ROLE_MAP = {
 
 SYSTEM_PROMPT = (
     "You are the editor of a punchy morning AI newsletter people actually finish. "
+    "Readers work in IT, from CIOs and directors to junior developers and testers: "
+    "they need to know what changed in the industry and what it means for their work. "
     "Given a headline and description, reply with ONLY a JSON object (no markdown, "
     "no commentary) with exactly these keys:\n"
     '  "hook": ONE line (max 110 chars) that makes a busy reader stop scrolling — '
     "conversational, specific, a little sly. Never promise what the facts don't back.\n"
     '  "details": array of 2-3 short bullets with the concrete facts — names, '
     "numbers, dates, who did what. Each under 120 chars, no filler.\n"
-    '  "why": one sentence on why the reader should care — concrete stakes, '
-    'never starting with "This".\n'
+    '  "why": one sentence on what it means for an IT team or business — what to try, '
+    'watch, plan for or budget for. Concrete stakes, never starting with "This".\n'
+    "If the description adds nothing beyond the headline, give ONE detail that restates "
+    "only what the headline says. Never invent names, numbers, dates or quotes.\n"
     '  "category": exactly one of '
     '["model_updates","new_launch","research","good_news","bad_news","awareness","general"].\n'
     '  "roles": an array of 1-3 from '

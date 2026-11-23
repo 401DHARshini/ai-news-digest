@@ -59,6 +59,15 @@ Set these as repo Secrets under **Settings → Secrets and variables → Actions
 
 Without any secrets, `python send_digest.py` still runs end-to-end and produces a local PDF. The cron schedule (currently `30 2 * * *` UTC = 8:00 AM IST) lives in the workflow file; cron times are UTC.
 
+## Editorial ranking (fetch_news.py, section 1b)
+
+The digest is read by everyone from CIOs to junior engineers, so selection is curated, not just newest-first:
+- `importance()` ranks within each category: official/vendor feeds > Google News; +1 for `TOP_PRESS`, +2 if the title names a `WATCHLIST` company/topic; arXiv lowest.
+- Google News items are dropped unless the title matches `WATCH_RE`, and when the publisher is in `LOW_VALUE_SOURCES` (PR wires, stock-tip sites) or the headline is share-price chatter (`STOCK_RE`).
+- Caps: `ARXIV_MAX` papers (always filed under R&D), `MAX_PER_COMPANY`, `MAX_PER_SOURCE`, and `max_per_category=4`.
+- `dedupe` also catches reworded headlines via word overlap.
+- The first story of each category feeds "Today at a glance" and the email subject, so ranking directly shapes those.
+
 ## Common change points
 
 - Add/remove **sources** → `RSS_FEEDS` in `fetch_news.py`.
