@@ -35,8 +35,12 @@ PROVIDERS = {
 # skipped, so you can enable as few or as many providers as you like. If a model
 # is decommissioned or rate-limited, the request fails and the next one is tried.
 MODEL_CHAIN = [
-    ("nvidia",     "nvidia/nvidia-nemotron-nano-9b-v2"),
-    ("nvidia",     "nvidia/llama-3.3-nemotron-super-49b-v1.5"),
+    # NVIDIA retires models regularly (the old nemotron-nano-9b-v2 / super-49b now
+    # return 410 Gone). Current list: https://integrate.api.nvidia.com/v1/models
+    ("nvidia",     "google/gemma-4-31b-it"),
+    ("nvidia",     "nvidia/nemotron-3.5-lightning-30b-a3b"),
+    ("nvidia",     "z-ai/glm-5.3-flash"),
+    ("nvidia",     "minimaxai/minimax-m3.1-flash"),
     ("groq",       "llama-3.3-70b-versatile"),
     ("groq",       "llama-3.1-8b-instant"),
     ("groq",       "gemma2-9b-it"),
@@ -161,19 +165,30 @@ def _parse(content: str) -> dict | None:
     }
 
 
+# Models that answered 404/410 (retired or renamed) this run — skipped for the
+# remaining stories instead of failing once per story.
+_DEAD_MODELS: set = set()
+
+
 def ai_enrich(title: str, raw_summary: str) -> dict | None:
     """Try each free model in turn; return {summary, category, roles} or None."""
     if not AI_ENABLED:
         return None
     for provider, model in MODEL_CHAIN:
-        if not PROVIDERS[provider]["key"]:
+        if not PROVIDERS[provider]["key"] or (provider, model) in _DEAD_MODELS:
             continue
         try:
             result = _parse(_call(provider, model, title, raw_summary or title))
             if result:
                 return result
         except Exception as e:
-            print(f"[ai] {provider}:{model} -> {type(e).__name__}: {str(e)[:120]}")
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if status in (404, 410):
+                _DEAD_MODELS.add((provider, model))
+                print(f"[ai] {provider}:{model} is retired/unavailable ({status}) — "
+                      "skipping it for the rest of this run; update MODEL_CHAIN")
+            else:
+                print(f"[ai] {provider}:{model} -> {type(e).__name__}: {str(e)[:120]}")
     return None
 
 
