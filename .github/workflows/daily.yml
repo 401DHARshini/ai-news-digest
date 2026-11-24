@@ -2,8 +2,10 @@ name: Daily AI News Digest
 
 on:
   schedule:
-    # 9:00 AM IST = 3:30 AM UTC. Change the cron number to adjust the time.
-    - cron: "30 3 * * *"
+    # 5:17 AM IST (23:47 UTC the day before). GitHub starts scheduled runs
+    # ~5-6 hours late, so this lands the email around 10-11 AM IST. An odd
+    # minute avoids the :00/:30 rush, when GitHub delays runs the most.
+    - cron: "47 23 * * *"
   workflow_dispatch: {}   # lets you trigger it manually from the Actions tab
 
 # Needed so the web edition can be published to GitHub Pages.
@@ -15,6 +17,8 @@ permissions:
 jobs:
   send-digest:
     runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Kolkata   # digest date = India date, even if the run starts before midnight UTC
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4

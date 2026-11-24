@@ -57,7 +57,7 @@ Set these as repo Secrets under **Settings → Secrets and variables → Actions
 | `HF_TOKEN` | no | Enables LLM enrichment; keyword fallback if unset |
 | `ROLE_FILTER` | no | Comma-separated roles (e.g. `Developer,AI Engineer`) to restrict the digest; matched case-insensitively as substrings against role names |
 
-Without any secrets, `python send_digest.py` still runs end-to-end and produces a local PDF. The cron schedule (currently `30 2 * * *` UTC = 8:00 AM IST) lives in the workflow file; cron times are UTC.
+Without any secrets, `python send_digest.py` still runs end-to-end and produces a local PDF. The cron schedule (currently `47 23 * * *` UTC = 5:17 AM IST; GitHub runs it ~5-6h late, so mail lands ~10-11 AM IST) lives in the workflow file; cron times are UTC.
 
 ## Editorial ranking (fetch_news.py, section 1b)
 
